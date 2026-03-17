@@ -26,6 +26,10 @@ public class login_page extends JFrame {
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setSize(1920,1080);
         setLocationRelativeTo(null);
+        CreateACCButton.addActionListener(e -> {
+            new signup_page();
+            setVisible(false);
+        });
         setVisible(true);
     }
 
