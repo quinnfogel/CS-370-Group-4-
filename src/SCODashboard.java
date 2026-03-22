@@ -4,21 +4,21 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.border.LineBorder;
 import java.awt.*;
 
-public class StudentDashboard extends JFrame {
+public class SCODashboard extends JFrame {
 
-    public static final Color NAVY = new Color(15, 44, 68);
-    public static final Color TEAL = new Color(45, 166, 196);
-    public static final Color LIGHT_BG = new Color(245, 247, 250);
+    public static final Color ADMIN_BG = new Color(234, 244, 238);      // light sage green
+    public static final Color SIDEBAR_GREEN = new Color(63, 107, 74);   // dark muted green
+    public static final Color ACCENT_GREEN = new Color(95, 143, 107);   // medium green
     public static final Color CARD_BG = Color.WHITE;
     public static final Color DARK_TEXT = new Color(33, 37, 41);
-    public static final Color BORDER = new Color(220, 224, 230);
+    public static final Color BORDER = new Color(207, 216, 211);
     public static final Color LOGOUT_RED = new Color(178, 34, 34);
 
     private CardLayout cardLayout;
     private JPanel contentPanel;
 
-    public StudentDashboard() {
-        setTitle("CSUSM VetConnect");
+    public SCODashboard() {
+        setTitle("CSUSM VetConnect - SCO Dashboard");
         setSize(1280, 800);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
@@ -31,7 +31,7 @@ public class StudentDashboard extends JFrame {
 
     private JPanel createHeader() {
         JPanel header = new JPanel(new BorderLayout());
-        header.setBackground(NAVY);
+        header.setBackground(SIDEBAR_GREEN);
         header.setPreferredSize(new Dimension(1280, 75));
         header.setBorder(new EmptyBorder(12, 20, 12, 20));
 
@@ -42,11 +42,11 @@ public class StudentDashboard extends JFrame {
         JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 8));
         rightPanel.setOpaque(false);
 
-        JLabel welcomeLabel = new JLabel("Welcome, Nathan Green");
+        JLabel welcomeLabel = new JLabel("Welcome, Jordan Hayes");
         welcomeLabel.setForeground(Color.WHITE);
         welcomeLabel.setFont(new Font("Segoe UI", Font.PLAIN, 15));
 
-        JLabel roleLabel = new JLabel("Role: Student");
+        JLabel roleLabel = new JLabel("Role: SCO");
         roleLabel.setForeground(Color.WHITE);
         roleLabel.setFont(new Font("Segoe UI", Font.PLAIN, 15));
 
@@ -64,7 +64,7 @@ public class StudentDashboard extends JFrame {
 
     private JPanel createSidebar() {
         JPanel sidebar = new JPanel();
-        sidebar.setBackground(NAVY);
+        sidebar.setBackground(SIDEBAR_GREEN);
         sidebar.setPreferredSize(new Dimension(230, 0));
         sidebar.setLayout(new BoxLayout(sidebar, BoxLayout.Y_AXIS));
         sidebar.setBorder(new EmptyBorder(25, 15, 25, 15));
@@ -80,25 +80,20 @@ public class StudentDashboard extends JFrame {
         JButton homeButton = createSidebarButton("Dashboard Home");
         homeButton.addActionListener(e -> cardLayout.show(contentPanel, "HOME"));
 
-        JButton requestButton = createSidebarButton("Request Certification");
-        requestButton.addActionListener(e -> cardLayout.show(contentPanel, "REQUEST"));
-
-        JButton modifyButton = createSidebarButton("Modify Certification");
-        modifyButton.addActionListener(e -> cardLayout.show(contentPanel, "MODIFY"));
-
-        JButton statusButton = createSidebarButton("View Request Status");
-        statusButton.addActionListener(e -> cardLayout.show(contentPanel, "STATUS"));
-
+        JButton submittedButton = createSidebarButton("Submitted Requests");
+        submittedButton.addActionListener(e -> cardLayout.show(contentPanel, "SUBMITTED"));        JButton manageButton = createSidebarButton("Manage Requests");
+        JButton errorsButton = createSidebarButton("Certification Errors");
+        errorsButton.addActionListener(e -> cardLayout.show(contentPanel, "ERRORS"));
         JButton historyButton = createSidebarButton("Request History");
         historyButton.addActionListener(e -> cardLayout.show(contentPanel, "HISTORY"));
 
         sidebar.add(homeButton);
         sidebar.add(Box.createRigidArea(new Dimension(0, 12)));
-        sidebar.add(requestButton);
+        sidebar.add(submittedButton);
         sidebar.add(Box.createRigidArea(new Dimension(0, 12)));
-        sidebar.add(modifyButton);
+        sidebar.add(manageButton);
         sidebar.add(Box.createRigidArea(new Dimension(0, 12)));
-        sidebar.add(statusButton);
+        sidebar.add(errorsButton);
         sidebar.add(Box.createRigidArea(new Dimension(0, 12)));
         sidebar.add(historyButton);
         sidebar.add(Box.createVerticalGlue());
@@ -110,11 +105,10 @@ public class StudentDashboard extends JFrame {
         cardLayout = new CardLayout();
         contentPanel = new JPanel(cardLayout);
 
-        contentPanel.add(new HomePagePanel(), "HOME");
-        contentPanel.add(new RequestCertificationPanel(), "REQUEST");
-        contentPanel.add(new ModifyCertificationPanel(), "MODIFY");
-        contentPanel.add(new ViewRequestStatusPanel(), "STATUS");
-        contentPanel.add(new RequestHistoryPanel(), "HISTORY");
+        contentPanel.add(new SCODashboardHomePanel(), "HOME");
+        contentPanel.add(new SubmittedRequestsPanel(), "SUBMITTED");
+        contentPanel.add(new CertificationErrorsPanel(), "ERRORS");
+        contentPanel.add(new SCORequestHistoryPanel(), "HISTORY");
         cardLayout.show(contentPanel, "HOME");
 
         return contentPanel;
@@ -125,14 +119,17 @@ public class StudentDashboard extends JFrame {
         button.setAlignmentX(Component.LEFT_ALIGNMENT);
         button.setMaximumSize(new Dimension(Integer.MAX_VALUE, 42));
         button.setFocusPainted(false);
-        button.setBackground(NAVY);
+        button.setBackground(SIDEBAR_GREEN);
         button.setForeground(Color.WHITE);
         button.setFont(new Font("Segoe UI", Font.PLAIN, 15));
         button.setBorder(BorderFactory.createCompoundBorder(
-                new LineBorder(TEAL, 1, true),
+                new LineBorder(ACCENT_GREEN, 1, true),
                 new EmptyBorder(10, 15, 10, 15)
         ));
         button.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        button.setOpaque(true);
+        button.setContentAreaFilled(true);
+        button.setBorderPainted(true);
         return button;
     }
 
@@ -149,7 +146,7 @@ public class StudentDashboard extends JFrame {
         button.setCursor(new Cursor(Cursor.HAND_CURSOR));
         button.setOpaque(true);
         button.setContentAreaFilled(true);
+        button.setBorderPainted(true);
         return button;
     }
-
 }

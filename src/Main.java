@@ -1,9 +1,10 @@
-
 import javax.swing.*;
-import javax.swing.SwingUtilities;
 
 public class Main {
     public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> new StudentDashboard().setVisible(true));
+        SwingUtilities.invokeLater(() -> {
+            SCODashboard dashboard = new SCODashboard();
+            dashboard.setVisible(true);
+        });
     }
 }
