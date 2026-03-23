@@ -3,8 +3,14 @@ import javax.swing.border.CompoundBorder;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.LineBorder;
 import java.awt.*;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 
 public class HomePagePanel extends JPanel {
+
+    private static final String DB_URL = "jdbc:sqlite:database.sqlite";
 
     public HomePagePanel() {
         setBackground(StudentDashboard.LIGHT_BG);
@@ -24,10 +30,8 @@ public class HomePagePanel extends JPanel {
         JPanel centerContent = new JPanel(new BorderLayout(0, 20));
         centerContent.setOpaque(false);
 
-// top section = summary cards
         centerContent.add(createSummaryCards(), BorderLayout.NORTH);
 
-// middle stacked section for contact + info
         JPanel lowerSection = new JPanel();
         lowerSection.setOpaque(false);
         lowerSection.setLayout(new BoxLayout(lowerSection, BoxLayout.Y_AXIS));
@@ -42,7 +46,6 @@ public class HomePagePanel extends JPanel {
         lowerSection.add(Box.createRigidArea(new Dimension(0, 20)));
         lowerSection.add(infoPanel);
 
-// wrapper forces full width
         JPanel lowerWrapper = new JPanel(new BorderLayout());
         lowerWrapper.setOpaque(false);
         lowerWrapper.add(lowerSection, BorderLayout.NORTH);
@@ -53,15 +56,84 @@ public class HomePagePanel extends JPanel {
     }
 
     private JPanel createSummaryCards() {
+        DashboardSummary summary = loadDashboardSummary();
+
         JPanel cardsPanel = new JPanel(new GridLayout(1, 3, 20, 0));
         cardsPanel.setOpaque(false);
         cardsPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 120));
 
-        cardsPanel.add(createSummaryCard("Current Term", "Fall 2025"));
-        cardsPanel.add(createSummaryCard("Benefit Type", "CH33"));
-        cardsPanel.add(createSummaryCard("Latest Status", "In Review"));
+        cardsPanel.add(createSummaryCard("Current Term", summary.currentTerm));
+        cardsPanel.add(createSummaryCard("Benefit Type", summary.benefitType));
+        cardsPanel.add(createSummaryCard("Latest Status", summary.latestStatus));
 
         return cardsPanel;
+    }
+
+    private DashboardSummary loadDashboardSummary() {
+        DashboardSummary summary = new DashboardSummary();
+        summary.currentTerm = "N/A";
+        summary.benefitType = "N/A";
+        summary.latestStatus = "N/A";
+
+        int userId = Session.getUserId();
+        if (userId == 0) {
+            return summary;
+        }
+
+        String studentQuery = """
+                SELECT student_id, benefit_type
+                FROM student
+                WHERE user_id = ?
+                """;
+
+        String latestRequestQuery = """
+                SELECT academic_term_code, status
+                FROM cert_request
+                WHERE student_id = ?
+                ORDER BY last_updated_date DESC, cert_id DESC
+                LIMIT 1
+                """;
+
+        try (Connection conn = DriverManager.getConnection(DB_URL)) {
+            int studentId = 0;
+
+            try (PreparedStatement pstmt = conn.prepareStatement(studentQuery)) {
+                pstmt.setInt(1, userId);
+
+                try (ResultSet rs = pstmt.executeQuery()) {
+                    if (rs.next()) {
+                        studentId = rs.getInt("student_id");
+
+                        String benefitType = rs.getString("benefit_type");
+                        if (benefitType != null && !benefitType.isBlank()) {
+                            summary.benefitType = benefitType;
+                        }
+                    } else {
+                        return summary;
+                    }
+                }
+            }
+
+            try (PreparedStatement pstmt = conn.prepareStatement(latestRequestQuery)) {
+                pstmt.setInt(1, studentId);
+
+                try (ResultSet rs = pstmt.executeQuery()) {
+                    if (rs.next()) {
+                        summary.currentTerm = String.valueOf(rs.getInt("academic_term_code"));
+
+                        String latestStatus = rs.getString("status");
+                        if (latestStatus != null && !latestStatus.isBlank()) {
+                            summary.latestStatus = latestStatus;
+                        }
+                    }
+                }
+            }
+
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+
+        return summary;
     }
 
     private JPanel createSummaryCard(String title, String value) {
@@ -171,7 +243,6 @@ public class HomePagePanel extends JPanel {
         infoPanel.add(footer);
         infoPanel.add(footer2);
 
-
         return infoPanel;
     }
 
@@ -180,5 +251,11 @@ public class HomePagePanel extends JPanel {
         label.setFont(new Font("Segoe UI", Font.PLAIN, 16));
         label.setForeground(StudentDashboard.DARK_TEXT);
         return label;
+    }
+
+    private static class DashboardSummary {
+        String currentTerm;
+        String benefitType;
+        String latestStatus;
     }
 }

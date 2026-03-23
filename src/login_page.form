@@ -86,7 +86,7 @@
               <text value=""/>
             </properties>
           </component>
-          <component id="8a176" class="javax.swing.JTextField" binding="UsernameForm">
+          <component id="8a176" class="javax.swing.JTextField" binding="EmailForm">
             <constraints>
               <grid row="4" column="1" row-span="1" col-span="3" vsize-policy="0" hsize-policy="0" anchor="0" fill="1" indent="0" use-parent-layout="false">
                 <preferred-size width="150" height="-1"/>
@@ -96,14 +96,14 @@
               <horizontalAlignment value="2"/>
             </properties>
           </component>
-          <component id="3c363" class="javax.swing.JLabel" binding="UsernameLabel" custom-create="true">
+          <component id="3c363" class="javax.swing.JLabel" binding="EmailLabel" custom-create="true">
             <constraints>
               <grid row="3" column="1" row-span="1" col-span="3" vsize-policy="0" hsize-policy="0" anchor="8" fill="0" indent="0" use-parent-layout="false"/>
             </constraints>
             <properties>
               <background color="-1"/>
               <foreground color="-1"/>
-              <text value="Username:"/>
+              <text value="Email:"/>
             </properties>
           </component>
           <component id="a4bd8" class="javax.swing.JPasswordField" binding="PasswordField">

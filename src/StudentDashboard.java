@@ -42,15 +42,29 @@ public class StudentDashboard extends JFrame {
         JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 8));
         rightPanel.setOpaque(false);
 
-        JLabel welcomeLabel = new JLabel("Welcome, Nathan Green");
+        String firstName = Session.getFirstName() != null ? Session.getFirstName() : "";
+        String lastName = Session.getLastName() != null ? Session.getLastName() : "";
+        String fullName = (firstName + " " + lastName).trim();
+        if (fullName.isEmpty()) {
+            fullName = "User";
+        }
+
+        String role = Session.getRole() != null ? Session.getRole() : "Student";
+
+        JLabel welcomeLabel = new JLabel("Welcome, " + fullName);
         welcomeLabel.setForeground(Color.WHITE);
         welcomeLabel.setFont(new Font("Segoe UI", Font.PLAIN, 15));
 
-        JLabel roleLabel = new JLabel("Role: Student");
+        JLabel roleLabel = new JLabel("Role: " + role);
         roleLabel.setForeground(Color.WHITE);
         roleLabel.setFont(new Font("Segoe UI", Font.PLAIN, 15));
 
         JButton logoutButton = createLogoutButton("Logout");
+        logoutButton.addActionListener(e -> {
+            Session.clearSession();
+            new login_page().setVisible(true);
+            dispose();
+        });
 
         rightPanel.add(welcomeLabel);
         rightPanel.add(roleLabel);
@@ -81,16 +95,13 @@ public class StudentDashboard extends JFrame {
         homeButton.addActionListener(e -> cardLayout.show(contentPanel, "HOME"));
 
         JButton requestButton = createSidebarButton("Request Certification");
-        requestButton.addActionListener(e -> cardLayout.show(contentPanel, "REQUEST"));
 
         JButton modifyButton = createSidebarButton("Modify Certification");
-        modifyButton.addActionListener(e -> cardLayout.show(contentPanel, "MODIFY"));
 
         JButton statusButton = createSidebarButton("View Request Status");
         statusButton.addActionListener(e -> cardLayout.show(contentPanel, "STATUS"));
 
         JButton historyButton = createSidebarButton("Request History");
-        historyButton.addActionListener(e -> cardLayout.show(contentPanel, "HISTORY"));
 
         sidebar.add(homeButton);
         sidebar.add(Box.createRigidArea(new Dimension(0, 12)));
@@ -110,11 +121,9 @@ public class StudentDashboard extends JFrame {
         cardLayout = new CardLayout();
         contentPanel = new JPanel(cardLayout);
 
-        contentPanel.add(new HomePagePanel(), "HOME");
-        contentPanel.add(new RequestCertificationPanel(), "REQUEST");
-        contentPanel.add(new ModifyCertificationPanel(), "MODIFY");
+        contentPanel.add(new JScrollPane(new HomePagePanel()), "HOME");
         contentPanel.add(new ViewRequestStatusPanel(), "STATUS");
-        contentPanel.add(new RequestHistoryPanel(), "HISTORY");
+
         cardLayout.show(contentPanel, "HOME");
 
         return contentPanel;
@@ -151,5 +160,4 @@ public class StudentDashboard extends JFrame {
         button.setContentAreaFilled(true);
         return button;
     }
-
 }
