@@ -188,35 +188,35 @@ public class signup_page extends JFrame {
     private void createUIComponents() {
         TitleCLabel = new JLabel("Welcome to VetConnect");
         Font t = TitleCLabel.getFont();
-        TitleCLabel.setFont(t.deriveFont(45f));
+        TitleCLabel.setFont(t.deriveFont(30f));
         TitleCLabel.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
 
         FirstNameLabel = new JLabel("First Name:");
         Font fn = FirstNameLabel.getFont();
-        FirstNameLabel.setFont(fn.deriveFont(25f));
+        FirstNameLabel.setFont(fn.deriveFont(12f));
 
         LastNameLabel = new JLabel("Last Name:");
         Font ln = LastNameLabel.getFont();
-        LastNameLabel.setFont(ln.deriveFont(25f));
+        LastNameLabel.setFont(ln.deriveFont(12f));
 
         EmailLabel = new JLabel("Email:");
         Font u = EmailLabel.getFont();
-        EmailLabel.setFont(u.deriveFont(25f));
+        EmailLabel.setFont(u.deriveFont(12f));
         EmailLabel.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
 
         PasswordCLabel = new JLabel("Password:");
         Font p = PasswordCLabel.getFont();
-        PasswordCLabel.setFont(p.deriveFont(25f));
+        PasswordCLabel.setFont(p.deriveFont(12f));
         PasswordCLabel.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
 
         RePassLabel = new JLabel("Re-Enter Password:");
         Font rp = RePassLabel.getFont();
-        RePassLabel.setFont(rp.deriveFont(25f));
+        RePassLabel.setFont(rp.deriveFont(12f));
         RePassLabel.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
 
         LoginPageLabel = new JLabel("Already have an account?");
         Font c = LoginPageLabel.getFont();
-        LoginPageLabel.setFont(c.deriveFont(15f));
+        LoginPageLabel.setFont(c.deriveFont(10f));
         LoginPageLabel.setBorder(BorderFactory.createEmptyBorder(40, 0, 0, 0));
 
         CRAButtonWrap = new JPanel();

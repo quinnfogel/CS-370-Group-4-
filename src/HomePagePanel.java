@@ -12,6 +12,10 @@ public class HomePagePanel extends JPanel {
 
     private static final String DB_URL = "jdbc:sqlite:database.sqlite";
 
+    private JLabel currentTermValueLabel;
+    private JLabel benefitTypeValueLabel;
+    private JLabel latestStatusValueLabel;
+
     public HomePagePanel() {
         setBackground(StudentDashboard.LIGHT_BG);
         setLayout(new BorderLayout(0, 20));
@@ -53,18 +57,29 @@ public class HomePagePanel extends JPanel {
         centerContent.add(lowerWrapper, BorderLayout.CENTER);
 
         add(centerContent, BorderLayout.CENTER);
+
+        refreshSummary();
+    }
+
+    public void refreshSummary() {
+        DashboardSummary summary = loadDashboardSummary();
+        currentTermValueLabel.setText(summary.currentTerm);
+        benefitTypeValueLabel.setText(summary.benefitType);
+        latestStatusValueLabel.setText(summary.latestStatus);
     }
 
     private JPanel createSummaryCards() {
-        DashboardSummary summary = loadDashboardSummary();
-
         JPanel cardsPanel = new JPanel(new GridLayout(1, 3, 20, 0));
         cardsPanel.setOpaque(false);
         cardsPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 120));
 
-        cardsPanel.add(createSummaryCard("Current Term", summary.currentTerm));
-        cardsPanel.add(createSummaryCard("Benefit Type", summary.benefitType));
-        cardsPanel.add(createSummaryCard("Latest Status", summary.latestStatus));
+        currentTermValueLabel = createSummaryValueLabel("N/A");
+        benefitTypeValueLabel = createSummaryValueLabel("N/A");
+        latestStatusValueLabel = createSummaryValueLabel("N/A");
+
+        cardsPanel.add(createSummaryCard("Current Term", currentTermValueLabel));
+        cardsPanel.add(createSummaryCard("Benefit Type", benefitTypeValueLabel));
+        cardsPanel.add(createSummaryCard("Latest Status", latestStatusValueLabel));
 
         return cardsPanel;
     }
@@ -119,7 +134,7 @@ public class HomePagePanel extends JPanel {
 
                 try (ResultSet rs = pstmt.executeQuery()) {
                     if (rs.next()) {
-                        summary.currentTerm = String.valueOf(rs.getInt("academic_term_code"));
+                        summary.currentTerm = formatAcademicTerm(rs.getInt("academic_term_code"));
 
                         String latestStatus = rs.getString("status");
                         if (latestStatus != null && !latestStatus.isBlank()) {
@@ -136,7 +151,25 @@ public class HomePagePanel extends JPanel {
         return summary;
     }
 
-    private JPanel createSummaryCard(String title, String value) {
+    private String formatAcademicTerm(int academicTermCode) {
+        String code = String.valueOf(academicTermCode);
+
+        if (code.length() < 6) {
+            return code;
+        }
+
+        String year = code.substring(0, 4);
+        String termPart = code.substring(4);
+
+        return switch (termPart) {
+            case "01" -> "Spring " + year;
+            case "05" -> "Summer " + year;
+            case "08" -> "Fall " + year;
+            default -> code;
+        };
+    }
+
+    private JPanel createSummaryCard(String title, JLabel valueLabel) {
         JPanel card = new JPanel();
         card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
         card.setBackground(StudentDashboard.CARD_BG);
@@ -150,15 +183,18 @@ public class HomePagePanel extends JPanel {
         titleLabel.setFont(new Font("Segoe UI", Font.PLAIN, 15));
         titleLabel.setForeground(Color.GRAY);
 
-        JLabel valueLabel = new JLabel(value);
-        valueLabel.setFont(new Font("Segoe UI", Font.BOLD, 24));
-        valueLabel.setForeground(StudentDashboard.DARK_TEXT);
-
         card.add(titleLabel);
         card.add(Box.createRigidArea(new Dimension(0, 10)));
         card.add(valueLabel);
 
         return card;
+    }
+
+    private JLabel createSummaryValueLabel(String text) {
+        JLabel valueLabel = new JLabel(text);
+        valueLabel.setFont(new Font("Segoe UI", Font.BOLD, 24));
+        valueLabel.setForeground(StudentDashboard.DARK_TEXT);
+        return valueLabel;
     }
 
     private JPanel createContactPanel() {

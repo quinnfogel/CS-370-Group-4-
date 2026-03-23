@@ -17,6 +17,10 @@ public class StudentDashboard extends JFrame {
     private CardLayout cardLayout;
     private JPanel contentPanel;
 
+    private HomePagePanel homePagePanel;
+    private RequestCertificationPanel requestCertificationPanel;
+    private ViewRequestStatusPanel viewRequestStatusPanel;
+
     public StudentDashboard() {
         setTitle("CSUSM VetConnect");
         setSize(1280, 800);
@@ -92,14 +96,21 @@ public class StudentDashboard extends JFrame {
         sidebar.add(Box.createRigidArea(new Dimension(0, 20)));
 
         JButton homeButton = createSidebarButton("Dashboard Home");
-        homeButton.addActionListener(e -> cardLayout.show(contentPanel, "HOME"));
+        homeButton.addActionListener(e -> {
+            homePagePanel.refreshSummary();
+            cardLayout.show(contentPanel, "HOME");
+        });
 
         JButton requestButton = createSidebarButton("Request Certification");
+        requestButton.addActionListener(e -> cardLayout.show(contentPanel, "REQUEST"));
 
         JButton modifyButton = createSidebarButton("Modify Certification");
 
         JButton statusButton = createSidebarButton("View Request Status");
-        statusButton.addActionListener(e -> cardLayout.show(contentPanel, "STATUS"));
+        statusButton.addActionListener(e -> {
+            viewRequestStatusPanel.refreshData();
+            cardLayout.show(contentPanel, "STATUS");
+        });
 
         JButton historyButton = createSidebarButton("Request History");
 
@@ -121,8 +132,13 @@ public class StudentDashboard extends JFrame {
         cardLayout = new CardLayout();
         contentPanel = new JPanel(cardLayout);
 
-        contentPanel.add(new JScrollPane(new HomePagePanel()), "HOME");
-        contentPanel.add(new ViewRequestStatusPanel(), "STATUS");
+        homePagePanel = new HomePagePanel();
+        viewRequestStatusPanel = new ViewRequestStatusPanel();
+        requestCertificationPanel = new RequestCertificationPanel(homePagePanel);
+
+        contentPanel.add(new JScrollPane(homePagePanel), "HOME");
+        contentPanel.add(new JScrollPane(requestCertificationPanel), "REQUEST");
+        contentPanel.add(new JScrollPane(viewRequestStatusPanel), "STATUS");
 
         cardLayout.show(contentPanel, "HOME");
 
