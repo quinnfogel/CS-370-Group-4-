@@ -19,6 +19,7 @@ public class StudentDashboard extends JFrame {
 
     private HomePagePanel homePagePanel;
     private RequestCertificationPanel requestCertificationPanel;
+    private ModifyCertificationPanel modifyCertificationPanel;
     private ViewRequestStatusPanel viewRequestStatusPanel;
 
     public StudentDashboard() {
@@ -105,6 +106,10 @@ public class StudentDashboard extends JFrame {
         requestButton.addActionListener(e -> cardLayout.show(contentPanel, "REQUEST"));
 
         JButton modifyButton = createSidebarButton("Modify Certification");
+        modifyButton.addActionListener(e -> {
+            modifyCertificationPanel.refreshData();
+            cardLayout.show(contentPanel, "MODIFY");
+        });
 
         JButton statusButton = createSidebarButton("View Request Status");
         statusButton.addActionListener(e -> {
@@ -135,9 +140,11 @@ public class StudentDashboard extends JFrame {
         homePagePanel = new HomePagePanel();
         viewRequestStatusPanel = new ViewRequestStatusPanel();
         requestCertificationPanel = new RequestCertificationPanel(homePagePanel);
+        modifyCertificationPanel = new ModifyCertificationPanel(homePagePanel);
 
         contentPanel.add(new JScrollPane(homePagePanel), "HOME");
         contentPanel.add(new JScrollPane(requestCertificationPanel), "REQUEST");
+        contentPanel.add(new JScrollPane(modifyCertificationPanel), "MODIFY");
         contentPanel.add(new JScrollPane(viewRequestStatusPanel), "STATUS");
 
         cardLayout.show(contentPanel, "HOME");
