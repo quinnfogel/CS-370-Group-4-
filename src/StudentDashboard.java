@@ -21,6 +21,7 @@ public class StudentDashboard extends JFrame {
     private RequestCertificationPanel requestCertificationPanel;
     private ModifyCertificationPanel modifyCertificationPanel;
     private ViewRequestStatusPanel viewRequestStatusPanel;
+    private RequestHistoryPanel requestHistoryPanel;
 
     public StudentDashboard() {
         setTitle("CSUSM VetConnect");
@@ -118,6 +119,7 @@ public class StudentDashboard extends JFrame {
         });
 
         JButton historyButton = createSidebarButton("Request History");
+        historyButton.addActionListener(e -> cardLayout.show(contentPanel, "HISTORY"));
 
         sidebar.add(homeButton);
         sidebar.add(Box.createRigidArea(new Dimension(0, 12)));
@@ -141,11 +143,13 @@ public class StudentDashboard extends JFrame {
         viewRequestStatusPanel = new ViewRequestStatusPanel();
         requestCertificationPanel = new RequestCertificationPanel(homePagePanel);
         modifyCertificationPanel = new ModifyCertificationPanel(homePagePanel);
+        requestHistoryPanel = new RequestHistoryPanel();
 
         contentPanel.add(new JScrollPane(homePagePanel), "HOME");
         contentPanel.add(new JScrollPane(requestCertificationPanel), "REQUEST");
         contentPanel.add(new JScrollPane(modifyCertificationPanel), "MODIFY");
         contentPanel.add(new JScrollPane(viewRequestStatusPanel), "STATUS");
+        contentPanel.add(new JScrollPane(requestHistoryPanel), "HISTORY");
 
         cardLayout.show(contentPanel, "HOME");
 

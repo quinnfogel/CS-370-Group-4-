@@ -3,9 +3,11 @@ import javax.swing.border.CompoundBorder;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.LineBorder;
 import javax.swing.event.ListSelectionEvent;
-import javax.swing.event.ListSelectionListener;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.sql.*;
+import java.util.ArrayList;
+import java.util.List;
 
 public class RequestHistoryPanel extends JPanel {
 
@@ -24,11 +26,8 @@ public class RequestHistoryPanel extends JPanel {
     private JLabel trainingTimeValue;
     private JLabel allowanceValue;
 
-    private final Object[][] historyData = {
-            {"REQ-2025-001", "Fall 2025", "CH33", "Approved", "08/15/2025"},
-            {"REQ-2025-002", "Spring 2026", "CH33", "Approved", "01/12/2026"},
-            {"REQ-2024-003", "Summer 2025", "CH33", "Approved", "05/20/2025"}
-    };
+    // Keeps real cert_id values aligned with visible table rows
+    private final List<Integer> historyCertIds = new ArrayList<>();
 
     public RequestHistoryPanel() {
         setBackground(StudentDashboard.LIGHT_BG);
@@ -70,11 +69,7 @@ public class RequestHistoryPanel extends JPanel {
         centerContent.add(scrollPane, BorderLayout.CENTER);
         add(centerContent, BorderLayout.CENTER);
 
-        // Select first row by default so page doesn't open empty
-        if (historyTable.getRowCount() > 0) {
-            historyTable.setRowSelectionInterval(0, 0);
-            updateSelectedRequestDetails(0);
-        }
+        refreshData();
     }
 
     private JPanel createHistoryTablePanel() {
@@ -82,7 +77,7 @@ public class RequestHistoryPanel extends JPanel {
         panel.setLayout(new BorderLayout());
 
         String[] columns = {"Request ID", "Term", "Benefit Type", "Status", "Date Submitted"};
-        historyTableModel = new DefaultTableModel(historyData, columns) {
+        historyTableModel = new DefaultTableModel(columns, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
                 return false;
@@ -100,14 +95,12 @@ public class RequestHistoryPanel extends JPanel {
         historyTable.setFillsViewportHeight(true);
         historyTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
 
-        historyTable.getSelectionModel().addListSelectionListener(new ListSelectionListener() {
-            @Override
-            public void valueChanged(ListSelectionEvent e) {
-                if (!e.getValueIsAdjusting()) {
-                    int selectedRow = historyTable.getSelectedRow();
-                    if (selectedRow != -1) {
-                        updateSelectedRequestDetails(selectedRow);
-                    }
+        historyTable.getSelectionModel().addListSelectionListener((ListSelectionEvent e) -> {
+            if (!e.getValueIsAdjusting()) {
+                int selectedRow = historyTable.getSelectedRow();
+                if (selectedRow != -1 && selectedRow < historyCertIds.size()) {
+                    int certId = historyCertIds.get(selectedRow);
+                    loadSelectedRequestDetails(certId);
                 }
             }
         });
@@ -190,48 +183,180 @@ public class RequestHistoryPanel extends JPanel {
         return panel;
     }
 
-    private void updateSelectedRequestDetails(int row) {
-        String requestId = historyTableModel.getValueAt(row, 0).toString();
-        String term = historyTableModel.getValueAt(row, 1).toString();
-        String benefitType = historyTableModel.getValueAt(row, 2).toString();
-        String status = historyTableModel.getValueAt(row, 3).toString();
+    public void refreshData() {
+        loadRequestHistory();
+    }
 
-        requestIdValue.setText(requestId);
-        termValue.setText(term);
-        benefitTypeValue.setText(benefitType);
-        statusValue.setText(status);
-
-        // Dummy data for summary + courses based on selected request
+    private void loadRequestHistory() {
+        historyTableModel.setRowCount(0);
+        historyCertIds.clear();
+        clearSummary();
         coursesTableModel.setRowCount(0);
 
-        if (requestId.equals("REQ-2025-001")) {
-            totalClassesValue.setText("4");
-            totalUnitsValue.setText("12");
-            trainingTimeValue.setText("Full-Time");
-            allowanceValue.setText("$3,200 / month");
+        String sql =
+                "SELECT cr.cert_id, cr.academic_term_code, s.benefit_type, cr.status, " +
+                        "       COALESCE(cr.submission_date, cr.last_updated_date) AS submitted_on " +
+                        "FROM cert_request cr " +
+                        "JOIN student s ON cr.student_id = s.student_id " +
+                        "WHERE s.user_id = ? " +
+                        "ORDER BY datetime(COALESCE(cr.submission_date, cr.last_updated_date)) DESC, cr.cert_id DESC";
 
-            coursesTableModel.addRow(new Object[]{"CSCI", "370", "12345", "3", "16"});
-            coursesTableModel.addRow(new Object[]{"CSCI", "341", "22346", "3", "16"});
-            coursesTableModel.addRow(new Object[]{"BUS", "301", "32347", "3", "16"});
-            coursesTableModel.addRow(new Object[]{"MIS", "302", "42348", "3", "16"});
-        } else if (requestId.equals("REQ-2025-002")) {
-            totalClassesValue.setText("3");
-            totalUnitsValue.setText("9");
-            trainingTimeValue.setText("3/4-Time");
-            allowanceValue.setText("$2,400 / month");
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
 
-            coursesTableModel.addRow(new Object[]{"MIS", "201", "11223", "3", "16"});
-            coursesTableModel.addRow(new Object[]{"BUS", "302", "21224", "3", "16"});
-            coursesTableModel.addRow(new Object[]{"CSCI", "312", "31225", "3", "16"});
-        } else {
-            totalClassesValue.setText("2");
-            totalUnitsValue.setText("6");
-            trainingTimeValue.setText("Half-Time");
-            allowanceValue.setText("$1,600 / month");
+            ps.setInt(1, Session.getUserId());
 
-            coursesTableModel.addRow(new Object[]{"MATH", "160", "55111", "3", "8"});
-            coursesTableModel.addRow(new Object[]{"ENGL", "202", "55112", "3", "8"});
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    int certId = rs.getInt("cert_id");
+                    int termCode = rs.getInt("academic_term_code");
+                    String benefitType = rs.getString("benefit_type");
+                    String status = rs.getString("status");
+                    String submittedOn = rs.getString("submitted_on");
+
+                    historyCertIds.add(certId);
+                    historyTableModel.addRow(new Object[]{
+                            formatRequestId(certId),
+                            String.valueOf(termCode),
+                            benefitType,
+                            status,
+                            submittedOn != null ? submittedOn : "-"
+                    });
+                }
+            }
+
+            if (historyTableModel.getRowCount() > 0) {
+                historyTable.setRowSelectionInterval(0, 0);
+                loadSelectedRequestDetails(historyCertIds.get(0));
+            }
+
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Unable to load request history.\n" + ex.getMessage(),
+                    "Database Error",
+                    JOptionPane.ERROR_MESSAGE
+            );
         }
+    }
+
+    private void loadSelectedRequestDetails(int certId) {
+        loadRequestSummary(certId);
+        loadCoursesForRequest(certId);
+    }
+
+    private void loadRequestSummary(int certId) {
+        String sql =
+                "SELECT cr.cert_id, cr.academic_term_code, s.benefit_type, cr.status, " +
+                        "       cr.total_units, cr.unit_load_category, " +
+                        "       COALESCE(mac.estimated_monthly_allowance, 0) AS estimated_monthly_allowance, " +
+                        "       (SELECT COUNT(*) FROM course c WHERE c.cert_id = cr.cert_id) AS total_classes " +
+                        "FROM cert_request cr " +
+                        "JOIN student s ON cr.student_id = s.student_id " +
+                        "LEFT JOIN monthly_allowance_calculator mac ON cr.cert_id = mac.cert_id " +
+                        "WHERE cr.cert_id = ?";
+
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setInt(1, certId);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    requestIdValue.setText(formatRequestId(rs.getInt("cert_id")));
+                    termValue.setText(String.valueOf(rs.getInt("academic_term_code")));
+                    benefitTypeValue.setText(rs.getString("benefit_type"));
+                    statusValue.setText(rs.getString("status"));
+                    totalClassesValue.setText(String.valueOf(rs.getInt("total_classes")));
+                    totalUnitsValue.setText(String.valueOf(rs.getDouble("total_units")));
+                    trainingTimeValue.setText(formatTrainingTime(rs.getString("unit_load_category")));
+                    allowanceValue.setText("$" + String.format("%.2f", rs.getDouble("estimated_monthly_allowance")) + " / month");
+                } else {
+                    clearSummary();
+                }
+            }
+
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Unable to load request summary.\n" + ex.getMessage(),
+                    "Database Error",
+                    JOptionPane.ERROR_MESSAGE
+            );
+        }
+    }
+
+    private void loadCoursesForRequest(int certId) {
+        coursesTableModel.setRowCount(0);
+
+        String sql =
+                "SELECT course_prefix, course_number, section_number, units, course_length_weeks " +
+                        "FROM course " +
+                        "WHERE cert_id = ? " +
+                        "ORDER BY course_prefix, course_number, section_number";
+
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setInt(1, certId);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    coursesTableModel.addRow(new Object[]{
+                            rs.getString("course_prefix"),
+                            rs.getInt("course_number"),
+                            rs.getString("section_number"),
+                            rs.getDouble("units"),
+                            rs.getInt("course_length_weeks")
+                    });
+                }
+            }
+
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Unable to load course details.\n" + ex.getMessage(),
+                    "Database Error",
+                    JOptionPane.ERROR_MESSAGE
+            );
+        }
+    }
+
+    private static final String DB_URL = "jdbc:sqlite:database.sqlite";
+    private Connection getConnection() throws SQLException {
+        return DriverManager.getConnection(DB_URL);
+    }
+
+    private String formatRequestId(int certId) {
+        return String.format("REQ-%06d", certId);
+    }
+
+    private String formatTrainingTime(String unitLoadCategory) {
+        if (unitLoadCategory == null) return "-";
+
+        switch (unitLoadCategory) {
+            case "FullTime":
+                return "Full-Time";
+            case "ThreeQuarterTime":
+                return "3/4-Time";
+            case "HalfTime":
+                return "Half-Time";
+            case "LessThanHalfTime":
+                return "Less Than Half-Time";
+            default:
+                return unitLoadCategory;
+        }
+    }
+
+    private void clearSummary() {
+        requestIdValue.setText("");
+        termValue.setText("");
+        benefitTypeValue.setText("");
+        statusValue.setText("");
+        totalClassesValue.setText("");
+        totalUnitsValue.setText("");
+        trainingTimeValue.setText("");
+        allowanceValue.setText("");
     }
 
     private JPanel createCardPanel(String title) {
