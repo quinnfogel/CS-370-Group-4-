@@ -193,38 +193,38 @@ public class signup_page extends JFrame {
 
         FirstNameLabel = new JLabel("First Name:");
         Font fn = FirstNameLabel.getFont();
-        FirstNameLabel.setFont(fn.deriveFont(12f));
+        FirstNameLabel.setFont(fn.deriveFont(25f));
 
         LastNameLabel = new JLabel("Last Name:");
         Font ln = LastNameLabel.getFont();
-        LastNameLabel.setFont(ln.deriveFont(12f));
+        LastNameLabel.setFont(ln.deriveFont(25f));
 
         EmailLabel = new JLabel("Email:");
         Font u = EmailLabel.getFont();
-        EmailLabel.setFont(u.deriveFont(12f));
+        EmailLabel.setFont(u.deriveFont(25f));
         EmailLabel.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
 
         PasswordCLabel = new JLabel("Password:");
         Font p = PasswordCLabel.getFont();
-        PasswordCLabel.setFont(p.deriveFont(12f));
+        PasswordCLabel.setFont(p.deriveFont(25f));
         PasswordCLabel.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
 
         RePassLabel = new JLabel("Re-Enter Password:");
         Font rp = RePassLabel.getFont();
-        RePassLabel.setFont(rp.deriveFont(12f));
+        RePassLabel.setFont(rp.deriveFont(25f));
         RePassLabel.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
 
         LoginPageLabel = new JLabel("Already have an account?");
         Font c = LoginPageLabel.getFont();
-        LoginPageLabel.setFont(c.deriveFont(10f));
+        LoginPageLabel.setFont(c.deriveFont(15f));
         LoginPageLabel.setBorder(BorderFactory.createEmptyBorder(40, 0, 0, 0));
 
         CRAButtonWrap = new JPanel();
         CRAButtonWrap.setBorder(BorderFactory.createEmptyBorder(15, 0, 0, 0));
 
         LogoLabel = new JLabel();
-        ImageIcon icon = new ImageIcon(getClass().getResource("/images/temp_logo.jpg"));
-        Image scaled = icon.getImage().getScaledInstance(200, 200, Image.SCALE_SMOOTH);
+        ImageIcon icon = new ImageIcon(getClass().getResource("/images/logo.jpg"));
+        Image scaled = icon.getImage().getScaledInstance(220, 220, Image.SCALE_SMOOTH);
         LogoLabel.setIcon(new ImageIcon(scaled));
     }
 }

@@ -183,8 +183,8 @@ public class login_page extends JFrame {
         LoginButtonWrap.setBorder(BorderFactory.createEmptyBorder(15, 0, 0, 0));
 
         LogoLabel = new JLabel();
-        ImageIcon icon = new ImageIcon(getClass().getResource("/images/temp_logo.jpg"));
-        Image scaled = icon.getImage().getScaledInstance(200, 200, Image.SCALE_SMOOTH);
+        ImageIcon icon = new ImageIcon(getClass().getResource("/images/logo.jpg"));
+        Image scaled = icon.getImage().getScaledInstance(220, 220, Image.SCALE_SMOOTH);
         LogoLabel.setIcon(new ImageIcon(scaled));
     }
 }
