@@ -86,19 +86,12 @@ public class login_page extends JFrame {
                     Session.startSession(userId, userEmail, firstName, lastName, role);
                     updateLastLogin(conn, userId);
 
-                    JOptionPane.showMessageDialog(this,
-                            "Login successful. Welcome, " + firstName + "!",
-                            "Success",
-                            JOptionPane.INFORMATION_MESSAGE);
-
                     if ("Student".equalsIgnoreCase(role)) {
                         new StudentDashboard().setVisible(true);
                         dispose();
                     } else {
-                        JOptionPane.showMessageDialog(this,
-                                "Admin page WIP",
-                                "Work In Progress",
-                                JOptionPane.INFORMATION_MESSAGE);
+                        new SCODashboard().setVisible(true);
+                        dispose();
                     }
 
                 } else {
