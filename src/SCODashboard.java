@@ -81,21 +81,26 @@ public class SCODashboard extends JFrame {
         homeButton.addActionListener(e -> cardLayout.show(contentPanel, "HOME"));
 
         JButton submittedButton = createSidebarButton("Submitted Requests");
-        submittedButton.addActionListener(e -> cardLayout.show(contentPanel, "SUBMITTED"));        JButton manageButton = createSidebarButton("Manage Requests");
+        submittedButton.addActionListener(e -> cardLayout.show(contentPanel, "SUBMITTED"));
+
         JButton errorsButton = createSidebarButton("Certification Errors");
         errorsButton.addActionListener(e -> cardLayout.show(contentPanel, "ERRORS"));
+
         JButton historyButton = createSidebarButton("Request History");
         historyButton.addActionListener(e -> cardLayout.show(contentPanel, "HISTORY"));
+
+        JButton manageButton = createSidebarButton("Manage Accounts");
+        manageButton.addActionListener(e -> cardLayout.show(contentPanel, "MANAGE"));
 
         sidebar.add(homeButton);
         sidebar.add(Box.createRigidArea(new Dimension(0, 12)));
         sidebar.add(submittedButton);
         sidebar.add(Box.createRigidArea(new Dimension(0, 12)));
-        sidebar.add(manageButton);
-        sidebar.add(Box.createRigidArea(new Dimension(0, 12)));
         sidebar.add(errorsButton);
         sidebar.add(Box.createRigidArea(new Dimension(0, 12)));
         sidebar.add(historyButton);
+        sidebar.add(Box.createRigidArea(new Dimension(0, 12)));
+        sidebar.add(manageButton);
         sidebar.add(Box.createVerticalGlue());
 
         return sidebar;
@@ -109,6 +114,7 @@ public class SCODashboard extends JFrame {
         contentPanel.add(new SubmittedRequestsPanel(), "SUBMITTED");
         contentPanel.add(new CertificationErrorsPanel(), "ERRORS");
         contentPanel.add(new SCORequestHistoryPanel(), "HISTORY");
+        contentPanel.add(new ManageAccountsPanel(), "MANAGE");
         cardLayout.show(contentPanel, "HOME");
 
         return contentPanel;
