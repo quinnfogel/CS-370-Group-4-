@@ -11,6 +11,8 @@ import java.util.List;
 
 public class RequestHistoryPanel extends JPanel {
 
+    private static final String DB_URL = "jdbc:sqlite:database.sqlite";
+
     private JTable historyTable;
     private JTable coursesTable;
 
@@ -25,6 +27,8 @@ public class RequestHistoryPanel extends JPanel {
     private JLabel totalUnitsValue;
     private JLabel trainingTimeValue;
     private JLabel allowanceValue;
+
+    private JTextArea scoMessageArea;
 
     // Keeps real cert_id values aligned with visible table rows
     private final List<Integer> historyCertIds = new ArrayList<>();
@@ -55,6 +59,8 @@ public class RequestHistoryPanel extends JPanel {
         upperSection.add(Box.createRigidArea(new Dimension(0, 20)));
         upperSection.add(createSummaryPanel());
         upperSection.add(Box.createRigidArea(new Dimension(0, 20)));
+        upperSection.add(createScoMessagePanel());
+        upperSection.add(Box.createRigidArea(new Dimension(0, 20)));
         upperSection.add(createCoursesTablePanel());
 
         JPanel upperWrapper = new JPanel(new BorderLayout());
@@ -65,6 +71,7 @@ public class RequestHistoryPanel extends JPanel {
         scrollPane.setBorder(null);
         scrollPane.getVerticalScrollBar().setUnitIncrement(16);
         scrollPane.getViewport().setBackground(StudentDashboard.LIGHT_BG);
+        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
 
         centerContent.add(scrollPane, BorderLayout.CENTER);
         add(centerContent, BorderLayout.CENTER);
@@ -148,11 +155,46 @@ public class RequestHistoryPanel extends JPanel {
         return panel;
     }
 
+    private JPanel createScoMessagePanel() {
+        JPanel panel = createCardPanel("SCO Error / Action Needed Message");
+        panel.setLayout(new BorderLayout());
+
+        scoMessageArea = new JTextArea(5, 40);
+        scoMessageArea.setEditable(false);
+        scoMessageArea.setLineWrap(true);
+        scoMessageArea.setWrapStyleWord(true);
+        scoMessageArea.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        scoMessageArea.setForeground(new Color(140, 25, 25));
+        scoMessageArea.setBackground(new Color(255, 244, 244));
+        scoMessageArea.setText("No SCO note or error message for this request.");
+
+        JScrollPane scrollPane = new JScrollPane(scoMessageArea);
+        scrollPane.setBorder(new LineBorder(new Color(225, 170, 170), 1, true));
+        scrollPane.setPreferredSize(new Dimension(900, 100));
+
+        JPanel content = new JPanel(new BorderLayout());
+        content.setOpaque(false);
+        content.setBorder(new EmptyBorder(20, 0, 0, 0));
+        content.add(scrollPane, BorderLayout.CENTER);
+
+        panel.add(content, BorderLayout.CENTER);
+        return panel;
+    }
+
     private JPanel createCoursesTablePanel() {
         JPanel panel = createCardPanel("Certified Courses");
         panel.setLayout(new BorderLayout());
 
-        String[] columns = {"Prefix", "Course Number", "Class Number", "Units", "Weeks"};
+        String[] columns = {
+                "Section Number",
+                "Course Prefix",
+                "Course Number",
+                "Title / Course Name",
+                "CRN",
+                "Units",
+                "Course Length (Weeks)"
+        };
+
         coursesTableModel = new DefaultTableModel(columns, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
@@ -169,10 +211,19 @@ public class RequestHistoryPanel extends JPanel {
         coursesTable.setSelectionBackground(new Color(220, 240, 245));
         coursesTable.setGridColor(StudentDashboard.BORDER);
         coursesTable.setFillsViewportHeight(true);
+        coursesTable.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+
+        coursesTable.getColumnModel().getColumn(0).setPreferredWidth(110);
+        coursesTable.getColumnModel().getColumn(1).setPreferredWidth(110);
+        coursesTable.getColumnModel().getColumn(2).setPreferredWidth(110);
+        coursesTable.getColumnModel().getColumn(3).setPreferredWidth(240);
+        coursesTable.getColumnModel().getColumn(4).setPreferredWidth(100);
+        coursesTable.getColumnModel().getColumn(5).setPreferredWidth(80);
+        coursesTable.getColumnModel().getColumn(6).setPreferredWidth(150);
 
         JScrollPane scrollPane = new JScrollPane(coursesTable);
         scrollPane.setBorder(new LineBorder(StudentDashboard.BORDER, 1, true));
-        scrollPane.setPreferredSize(new Dimension(900, 180));
+        scrollPane.setPreferredSize(new Dimension(980, 180));
 
         JPanel content = new JPanel(new BorderLayout());
         content.setOpaque(false);
@@ -192,6 +243,7 @@ public class RequestHistoryPanel extends JPanel {
         historyCertIds.clear();
         clearSummary();
         coursesTableModel.setRowCount(0);
+        scoMessageArea.setText("No SCO note or error message for this request.");
 
         String sql =
                 "SELECT cr.cert_id, cr.academic_term_code, s.benefit_type, cr.status, " +
@@ -217,7 +269,7 @@ public class RequestHistoryPanel extends JPanel {
                     historyCertIds.add(certId);
                     historyTableModel.addRow(new Object[]{
                             formatRequestId(certId),
-                            String.valueOf(termCode),
+                            formatAcademicTerm(termCode),
                             benefitType,
                             status,
                             submittedOn != null ? submittedOn : "-"
@@ -243,6 +295,7 @@ public class RequestHistoryPanel extends JPanel {
     private void loadSelectedRequestDetails(int certId) {
         loadRequestSummary(certId);
         loadCoursesForRequest(certId);
+        loadScoMessage(certId);
     }
 
     private void loadRequestSummary(int certId) {
@@ -264,13 +317,14 @@ public class RequestHistoryPanel extends JPanel {
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
                     requestIdValue.setText(formatRequestId(rs.getInt("cert_id")));
-                    termValue.setText(String.valueOf(rs.getInt("academic_term_code")));
+                    termValue.setText(formatAcademicTerm(rs.getInt("academic_term_code")));
                     benefitTypeValue.setText(rs.getString("benefit_type"));
                     statusValue.setText(rs.getString("status"));
                     totalClassesValue.setText(String.valueOf(rs.getInt("total_classes")));
-                    totalUnitsValue.setText(String.valueOf(rs.getDouble("total_units")));
+                    totalUnitsValue.setText(formatNumber(rs.getDouble("total_units")));
                     trainingTimeValue.setText(formatTrainingTime(rs.getString("unit_load_category")));
                     allowanceValue.setText("$" + String.format("%.2f", rs.getDouble("estimated_monthly_allowance")) + " / month");
+                    applyStatusColor(statusValue.getText());
                 } else {
                     clearSummary();
                 }
@@ -286,14 +340,59 @@ public class RequestHistoryPanel extends JPanel {
         }
     }
 
-    private void loadCoursesForRequest(int certId) {
-        coursesTableModel.setRowCount(0);
-
+    private void loadScoMessage(int certId) {
         String sql =
-                "SELECT course_prefix, course_number, section_number, units, course_length_weeks " +
+                "SELECT COALESCE(status, '') AS status, " +
+                        "       COALESCE(sco_note, '') AS sco_note, " +
+                        "       COALESCE(cancel_requested, 0) AS cancel_requested " +
+                        "FROM cert_request " +
+                        "WHERE cert_id = ?";
+
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setInt(1, certId);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    String status = rs.getString("status");
+                    String scoNote = rs.getString("sco_note");
+                    boolean cancelRequested = rs.getInt("cancel_requested") == 1;
+
+                    if ("Cancellation Pending".equals(status) || cancelRequested) {
+                        scoMessageArea.setText("Student requested cancellation. Waiting for SCO approval.");
+                    } else if (scoNote != null && !scoNote.isBlank()) {
+                        scoMessageArea.setText(scoNote);
+                    } else if ("Action Needed".equals(status)) {
+                        scoMessageArea.setText("This request was marked Action Needed, but no detailed note was saved.");
+                    } else if ("Cancelled".equals(status)) {
+                        scoMessageArea.setText("This certification was cancelled and approved by the SCO.");
+                    } else {
+                        scoMessageArea.setText("No SCO note or error message for this request.");
+                    }
+                } else {
+                    scoMessageArea.setText("No SCO note or error message for this request.");
+                }
+            }
+
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Unable to load SCO message.\n" + ex.getMessage(),
+                    "Database Error",
+                    JOptionPane.ERROR_MESSAGE
+            );
+        }
+    }
+
+    private void loadCoursesForRequest(int certId) {
+        String sql =
+                "SELECT section_number, course_prefix, course_number, title, crn, units, course_length_weeks " +
                         "FROM course " +
                         "WHERE cert_id = ? " +
                         "ORDER BY course_prefix, course_number, section_number";
+
+        coursesTableModel.setRowCount(0);
 
         try (Connection conn = getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -303,10 +402,12 @@ public class RequestHistoryPanel extends JPanel {
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     coursesTableModel.addRow(new Object[]{
+                            rs.getString("section_number"),
                             rs.getString("course_prefix"),
                             rs.getInt("course_number"),
-                            rs.getString("section_number"),
-                            rs.getDouble("units"),
+                            rs.getString("title"),
+                            rs.getString("crn"),
+                            formatNumber(rs.getDouble("units")),
                             rs.getInt("course_length_weeks")
                     });
                 }
@@ -315,36 +416,10 @@ public class RequestHistoryPanel extends JPanel {
         } catch (SQLException ex) {
             JOptionPane.showMessageDialog(
                     this,
-                    "Unable to load course details.\n" + ex.getMessage(),
+                    "Unable to load course history.\n" + ex.getMessage(),
                     "Database Error",
                     JOptionPane.ERROR_MESSAGE
             );
-        }
-    }
-
-    private static final String DB_URL = "jdbc:sqlite:database.sqlite";
-    private Connection getConnection() throws SQLException {
-        return DriverManager.getConnection(DB_URL);
-    }
-
-    private String formatRequestId(int certId) {
-        return String.format("REQ-%06d", certId);
-    }
-
-    private String formatTrainingTime(String unitLoadCategory) {
-        if (unitLoadCategory == null) return "-";
-
-        switch (unitLoadCategory) {
-            case "FullTime":
-                return "Full-Time";
-            case "ThreeQuarterTime":
-                return "3/4-Time";
-            case "HalfTime":
-                return "Half-Time";
-            case "LessThanHalfTime":
-                return "Less Than Half-Time";
-            default:
-                return unitLoadCategory;
         }
     }
 
@@ -353,10 +428,28 @@ public class RequestHistoryPanel extends JPanel {
         termValue.setText("");
         benefitTypeValue.setText("");
         statusValue.setText("");
+        statusValue.setForeground(StudentDashboard.DARK_TEXT);
         totalClassesValue.setText("");
         totalUnitsValue.setText("");
         trainingTimeValue.setText("");
         allowanceValue.setText("");
+    }
+
+    private void applyStatusColor(String status) {
+        if (status == null) {
+            statusValue.setForeground(StudentDashboard.DARK_TEXT);
+            return;
+        }
+
+        switch (status) {
+            case "Submitted" -> statusValue.setForeground(new Color(204, 153, 0));
+            case "In Review" -> statusValue.setForeground(new Color(40, 90, 180));
+            case "Action Needed" -> statusValue.setForeground(new Color(178, 34, 34));
+            case "Approved", "Certified" -> statusValue.setForeground(new Color(34, 139, 34));
+            case "Cancellation Pending" -> statusValue.setForeground(new Color(128, 0, 128));
+            case "Cancelled" -> statusValue.setForeground(new Color(120, 120, 120));
+            default -> statusValue.setForeground(StudentDashboard.DARK_TEXT);
+        }
     }
 
     private JPanel createCardPanel(String title) {
@@ -366,8 +459,6 @@ public class RequestHistoryPanel extends JPanel {
                 new LineBorder(StudentDashboard.BORDER, 1, true),
                 new EmptyBorder(20, 20, 20, 20)
         ));
-        panel.setAlignmentX(Component.LEFT_ALIGNMENT);
-        panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
 
         JLabel titleLabel = new JLabel(title);
         titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 22));
@@ -397,5 +488,52 @@ public class RequestHistoryPanel extends JPanel {
         label.setFont(new Font("Segoe UI", Font.BOLD, 16));
         label.setForeground(StudentDashboard.DARK_TEXT);
         return label;
+    }
+
+    private Connection getConnection() throws SQLException {
+        return DriverManager.getConnection(DB_URL);
+    }
+
+    private String formatRequestId(int certId) {
+        return "REQ-" + certId;
+    }
+
+    private String formatAcademicTerm(int academicTermCode) {
+        String code = String.valueOf(academicTermCode);
+
+        if (code.length() < 6) {
+            return code;
+        }
+
+        String year = code.substring(0, 4);
+        String termPart = code.substring(4);
+
+        return switch (termPart) {
+            case "01" -> "Spring " + year;
+            case "05" -> "Summer " + year;
+            case "08" -> "Fall " + year;
+            default -> code;
+        };
+    }
+
+    private String formatTrainingTime(String unitLoadCategory) {
+        if (unitLoadCategory == null) {
+            return "";
+        }
+
+        return switch (unitLoadCategory) {
+            case "FullTime" -> "Full-Time";
+            case "ThreeQuarterTime" -> "3/4-Time";
+            case "HalfTime" -> "Half-Time";
+            case "LessThanHalfTime" -> "Less Than Half-Time";
+            default -> unitLoadCategory;
+        };
+    }
+
+    private String formatNumber(double value) {
+        if (value == (long) value) {
+            return String.valueOf((long) value);
+        }
+        return String.valueOf(value);
     }
 }

@@ -18,6 +18,7 @@ public class ViewRequestStatusPanel extends JPanel {
     private final Color STATUS_RED = new Color(220, 70, 70);
     private final Color STATUS_GREEN = new Color(70, 170, 90);
     private final Color STATUS_GRAY = new Color(140, 140, 140);
+    private final Color STATUS_PURPLE = new Color(128, 0, 128);
 
     private JLabel requestIdValue;
     private JLabel termValue;
@@ -27,6 +28,8 @@ public class ViewRequestStatusPanel extends JPanel {
     private JPanel statusValuePanel;
     private JLabel estimatedAllowanceValue;
     private JLabel trainingTimeValue;
+
+    private JTextArea scoMessageArea;
 
     private DefaultTableModel coursesTableModel;
 
@@ -49,11 +52,31 @@ public class ViewRequestStatusPanel extends JPanel {
         centerContent.setOpaque(false);
         centerContent.setLayout(new BoxLayout(centerContent, BoxLayout.Y_AXIS));
 
-        centerContent.add(createCertificationOverview());
-        centerContent.add(Box.createRigidArea(new Dimension(0, 20)));
-        centerContent.add(createCoursesTablePanel());
+        JPanel overviewPanel = createCertificationOverview();
+        JPanel messagePanel = createScoMessagePanel();
+        JPanel coursesPanel = createCoursesTablePanel();
 
-        add(centerContent, BorderLayout.CENTER);
+        overviewPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        messagePanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        coursesPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        centerContent.add(overviewPanel);
+        centerContent.add(Box.createRigidArea(new Dimension(0, 20)));
+        centerContent.add(messagePanel);
+        centerContent.add(Box.createRigidArea(new Dimension(0, 20)));
+        centerContent.add(coursesPanel);
+
+        JPanel wrapper = new JPanel(new BorderLayout());
+        wrapper.setOpaque(false);
+        wrapper.add(centerContent, BorderLayout.NORTH);
+
+        JScrollPane scrollPane = new JScrollPane(wrapper);
+        scrollPane.setBorder(null);
+        scrollPane.getVerticalScrollBar().setUnitIncrement(16);
+        scrollPane.getViewport().setBackground(StudentDashboard.LIGHT_BG);
+        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+
+        add(scrollPane, BorderLayout.CENTER);
 
         loadRequestData();
     }
@@ -118,6 +141,43 @@ public class ViewRequestStatusPanel extends JPanel {
         return overviewPanel;
     }
 
+    private JPanel createScoMessagePanel() {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBackground(StudentDashboard.CARD_BG);
+        panel.setBorder(new CompoundBorder(
+                new LineBorder(StudentDashboard.BORDER, 1, true),
+                new EmptyBorder(20, 20, 20, 20)
+        ));
+        panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 190));
+
+        JLabel title = new JLabel("SCO Error / Action Needed Message");
+        title.setFont(new Font("Segoe UI", Font.BOLD, 22));
+        title.setForeground(StudentDashboard.DARK_TEXT);
+
+        scoMessageArea = new JTextArea(5, 40);
+        scoMessageArea.setEditable(false);
+        scoMessageArea.setLineWrap(true);
+        scoMessageArea.setWrapStyleWord(true);
+        scoMessageArea.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        scoMessageArea.setForeground(new Color(140, 25, 25));
+        scoMessageArea.setBackground(new Color(255, 244, 244));
+        scoMessageArea.setText("No current SCO error message.");
+
+        JScrollPane messageScroll = new JScrollPane(scoMessageArea);
+        messageScroll.setBorder(new LineBorder(new Color(225, 170, 170), 1, true));
+        messageScroll.setPreferredSize(new Dimension(900, 100));
+
+        JPanel content = new JPanel(new BorderLayout());
+        content.setOpaque(false);
+        content.setBorder(new EmptyBorder(20, 0, 0, 0));
+        content.add(messageScroll, BorderLayout.CENTER);
+
+        panel.add(title, BorderLayout.NORTH);
+        panel.add(content, BorderLayout.CENTER);
+
+        return panel;
+    }
+
     private JPanel createCoursesTablePanel() {
         JPanel tablePanel = new JPanel(new BorderLayout());
         tablePanel.setBackground(StudentDashboard.CARD_BG);
@@ -125,13 +185,22 @@ public class ViewRequestStatusPanel extends JPanel {
                 new LineBorder(StudentDashboard.BORDER, 1, true),
                 new EmptyBorder(20, 20, 20, 20)
         ));
-        tablePanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 350));
+        tablePanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 380));
 
         JLabel sectionTitle = new JLabel("Certified Courses");
         sectionTitle.setFont(new Font("Segoe UI", Font.BOLD, 22));
         sectionTitle.setForeground(StudentDashboard.DARK_TEXT);
 
-        String[] columns = {"Prefix", "Course Number", "Class Number", "Units", "Weeks"};
+        String[] columns = {
+                "Section Number",
+                "Course Prefix",
+                "Course Number",
+                "Title / Course Name",
+                "CRN",
+                "Units",
+                "Course Length (Weeks)"
+        };
+
         coursesTableModel = new DefaultTableModel(columns, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
@@ -148,10 +217,19 @@ public class ViewRequestStatusPanel extends JPanel {
         coursesTable.setSelectionBackground(new Color(220, 240, 245));
         coursesTable.setGridColor(StudentDashboard.BORDER);
         coursesTable.setFillsViewportHeight(true);
+        coursesTable.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+
+        coursesTable.getColumnModel().getColumn(0).setPreferredWidth(110);
+        coursesTable.getColumnModel().getColumn(1).setPreferredWidth(110);
+        coursesTable.getColumnModel().getColumn(2).setPreferredWidth(110);
+        coursesTable.getColumnModel().getColumn(3).setPreferredWidth(240);
+        coursesTable.getColumnModel().getColumn(4).setPreferredWidth(100);
+        coursesTable.getColumnModel().getColumn(5).setPreferredWidth(80);
+        coursesTable.getColumnModel().getColumn(6).setPreferredWidth(150);
 
         JScrollPane scrollPane = new JScrollPane(coursesTable);
         scrollPane.setBorder(new LineBorder(StudentDashboard.BORDER, 1, true));
-        scrollPane.setPreferredSize(new Dimension(800, 180));
+        scrollPane.setPreferredSize(new Dimension(980, 200));
 
         JPanel content = new JPanel(new BorderLayout());
         content.setOpaque(false);
@@ -178,7 +256,9 @@ public class ViewRequestStatusPanel extends JPanel {
                 cr.total_units,
                 cr.unit_load_category,
                 s.benefit_type,
-                mac.estimated_monthly_allowance
+                mac.estimated_monthly_allowance,
+                COALESCE(cr.sco_note, '') AS sco_note,
+                COALESCE(cr.cancel_requested, 0) AS cancel_requested
             FROM cert_request cr
             JOIN student s ON cr.student_id = s.student_id
             LEFT JOIN monthly_allowance_calculator mac ON cr.cert_id = mac.cert_id
@@ -201,6 +281,8 @@ public class ViewRequestStatusPanel extends JPanel {
                     String unitLoadCategory = rs.getString("unit_load_category");
                     String benefitType = rs.getString("benefit_type");
                     double estimatedAllowance = rs.getDouble("estimated_monthly_allowance");
+                    String scoNote = rs.getString("sco_note");
+                    boolean cancelRequested = rs.getInt("cancel_requested") == 1;
 
                     requestIdValue.setText("REQ-" + certId);
                     termValue.setText(formatAcademicTerm(academicTermCode));
@@ -210,6 +292,7 @@ public class ViewRequestStatusPanel extends JPanel {
                     trainingTimeValue.setText(formatTrainingTime(unitLoadCategory));
 
                     updateStatusPanel(status);
+                    updateScoMessage(status, scoNote, cancelRequested);
                     loadCoursesForRequest(conn, certId);
                 } else {
                     showNoDataState("No certification request found.");
@@ -228,12 +311,33 @@ public class ViewRequestStatusPanel extends JPanel {
         }
     }
 
+    private void updateScoMessage(String status, String scoNote, boolean cancelRequested) {
+        if ("Cancellation Pending".equals(status) || cancelRequested) {
+            scoMessageArea.setText("Cancellation request submitted. Waiting for SCO approval.");
+            return;
+        }
+
+        if (scoNote != null && !scoNote.isBlank()) {
+            scoMessageArea.setText(scoNote);
+            return;
+        }
+
+        if ("Action Needed".equals(status)) {
+            scoMessageArea.setText("Your certification needs correction. Please review the request and make the required changes.");
+            return;
+        }
+
+        scoMessageArea.setText("No current SCO error message.");
+    }
+
     private void loadCoursesForRequest(Connection conn, int certId) throws SQLException {
         String sql = """
             SELECT
+                section_number,
                 course_prefix,
                 course_number,
-                section_number,
+                title,
+                crn,
                 units,
                 course_length_weeks
             FROM course
@@ -250,9 +354,11 @@ public class ViewRequestStatusPanel extends JPanel {
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     coursesTableModel.addRow(new Object[]{
+                            rs.getString("section_number"),
                             rs.getString("course_prefix"),
                             rs.getInt("course_number"),
-                            rs.getString("section_number"),
+                            rs.getString("title"),
+                            rs.getString("crn"),
                             formatNumber(rs.getDouble("units")),
                             rs.getInt("course_length_weeks")
                     });
@@ -272,6 +378,7 @@ public class ViewRequestStatusPanel extends JPanel {
         benefitTypeValue.setText("N/A");
         estimatedAllowanceValue.setText("$0.00 / month");
         trainingTimeValue.setText("—");
+        scoMessageArea.setText("No current SCO error message.");
         updateStatusPanel("No Request");
         coursesTableModel.setRowCount(0);
         System.out.println(message);
@@ -283,6 +390,8 @@ public class ViewRequestStatusPanel extends JPanel {
             case "In Review" -> STATUS_BLUE;
             case "Action Needed" -> STATUS_RED;
             case "Approved", "Certified" -> STATUS_GREEN;
+            case "Cancellation Pending" -> STATUS_PURPLE;
+            case "Cancelled" -> STATUS_GRAY;
             default -> STATUS_GRAY;
         };
 
@@ -308,58 +417,21 @@ public class ViewRequestStatusPanel extends JPanel {
         }
     }
 
-    private String formatAcademicTerm(int academicTermCode) {
-        String code = String.valueOf(academicTermCode);
+    private JPanel createStatusPanel(String text, Color bgColor) {
+        JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
+        panel.setOpaque(true);
+        panel.setBackground(bgColor);
+        panel.setBorder(new CompoundBorder(
+                new LineBorder(bgColor.darker(), 1, true),
+                new EmptyBorder(4, 10, 4, 10)
+        ));
 
-        if (code.length() < 6) {
-            return code;
-        }
+        JLabel label = new JLabel(text);
+        label.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        label.setForeground(Color.WHITE);
 
-        String year = code.substring(0, 4);
-        String termPart = code.substring(4);
-
-        return switch (termPart) {
-            case "01" -> "Spring " + year;
-            case "05" -> "Summer " + year;
-            case "08" -> "Fall " + year;
-            default -> "Term " + code;
-        };
-    }
-
-    private String formatTrainingTime(String unitLoadCategory) {
-        return switch (unitLoadCategory) {
-            case "FullTime" -> "Full-Time";
-            case "ThreeQuarterTime" -> "3/4 Time";
-            case "HalfTime" -> "Half-Time";
-            case "LessThanHalfTime" -> "Less Than Half-Time";
-            default -> unitLoadCategory != null ? unitLoadCategory : "—";
-        };
-    }
-
-    private String formatNumber(double value) {
-        if (value == (int) value) {
-            return String.valueOf((int) value);
-        }
-        return String.valueOf(value);
-    }
-
-    private JPanel createStatusPanel(String statusText, Color circleColor) {
-        JPanel statusPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
-        statusPanel.setOpaque(false);
-
-        JPanel statusCircle = new JPanel();
-        statusCircle.setPreferredSize(new Dimension(14, 14));
-        statusCircle.setBackground(circleColor);
-        statusCircle.setBorder(new LineBorder(Color.DARK_GRAY, 1, true));
-
-        JLabel statusLabel = new JLabel(statusText);
-        statusLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
-        statusLabel.setForeground(StudentDashboard.DARK_TEXT);
-
-        statusPanel.add(statusCircle);
-        statusPanel.add(statusLabel);
-
-        return statusPanel;
+        panel.add(label);
+        return panel;
     }
 
     private JLabel createInfoLabel(String text) {
@@ -378,5 +450,44 @@ public class ViewRequestStatusPanel extends JPanel {
 
     private Connection getConnection() throws SQLException {
         return DriverManager.getConnection(DB_URL);
+    }
+
+    private String formatAcademicTerm(int academicTermCode) {
+        String code = String.valueOf(academicTermCode);
+
+        if (code.length() < 6) {
+            return code;
+        }
+
+        String year = code.substring(0, 4);
+        String termPart = code.substring(4);
+
+        return switch (termPart) {
+            case "01" -> "Spring " + year;
+            case "05" -> "Summer " + year;
+            case "08" -> "Fall " + year;
+            default -> code;
+        };
+    }
+
+    private String formatTrainingTime(String unitLoadCategory) {
+        if (unitLoadCategory == null) {
+            return "—";
+        }
+
+        return switch (unitLoadCategory) {
+            case "FullTime" -> "Full-Time";
+            case "ThreeQuarterTime" -> "3/4-Time";
+            case "HalfTime" -> "Half-Time";
+            case "LessThanHalfTime" -> "Less Than Half-Time";
+            default -> unitLoadCategory;
+        };
+    }
+
+    private String formatNumber(double value) {
+        if (value == (long) value) {
+            return String.valueOf((long) value);
+        }
+        return String.valueOf(value);
     }
 }

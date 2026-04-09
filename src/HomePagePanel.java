@@ -2,7 +2,9 @@ import javax.swing.*;
 import javax.swing.border.CompoundBorder;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.LineBorder;
+import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.net.URI;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -31,32 +33,37 @@ public class HomePagePanel extends JPanel {
 
         add(topWrapper, BorderLayout.NORTH);
 
-        JPanel centerContent = new JPanel(new BorderLayout(0, 20));
+        JPanel centerContent = new JPanel();
         centerContent.setOpaque(false);
+        centerContent.setLayout(new BoxLayout(centerContent, BoxLayout.Y_AXIS));
 
-        centerContent.add(createSummaryCards(), BorderLayout.NORTH);
-
-        JPanel lowerSection = new JPanel();
-        lowerSection.setOpaque(false);
-        lowerSection.setLayout(new BoxLayout(lowerSection, BoxLayout.Y_AXIS));
-
+        JPanel summaryCards = createSummaryCards();
         JPanel contactPanel = createContactPanel();
         JPanel infoPanel = createInformationPanel();
+        JPanel benefitsPanel = createBenefitsSection();
+        JPanel unitTablePanel = createFullTimeUnitsPanel();
 
+        summaryCards.setAlignmentX(Component.LEFT_ALIGNMENT);
         contactPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
         infoPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        benefitsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        unitTablePanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        lowerSection.add(contactPanel);
-        lowerSection.add(Box.createRigidArea(new Dimension(0, 20)));
-        lowerSection.add(infoPanel);
+        centerContent.add(summaryCards);
+        centerContent.add(Box.createRigidArea(new Dimension(0, 20)));
+        centerContent.add(contactPanel);
+        centerContent.add(Box.createRigidArea(new Dimension(0, 20)));
+        centerContent.add(infoPanel);
+        centerContent.add(Box.createRigidArea(new Dimension(0, 20)));
+        centerContent.add(benefitsPanel);
+        centerContent.add(Box.createRigidArea(new Dimension(0, 20)));
+        centerContent.add(unitTablePanel);
 
-        JPanel lowerWrapper = new JPanel(new BorderLayout());
-        lowerWrapper.setOpaque(false);
-        lowerWrapper.add(lowerSection, BorderLayout.NORTH);
+        JPanel wrapper = new JPanel(new BorderLayout());
+        wrapper.setOpaque(false);
+        wrapper.add(centerContent, BorderLayout.NORTH);
 
-        centerContent.add(lowerWrapper, BorderLayout.CENTER);
-
-        add(centerContent, BorderLayout.CENTER);
+        add(wrapper, BorderLayout.CENTER);
 
         refreshSummary();
     }
@@ -198,59 +205,43 @@ public class HomePagePanel extends JPanel {
     }
 
     private JPanel createContactPanel() {
-        JPanel contactPanel = new JPanel();
-        contactPanel.setLayout(new BoxLayout(contactPanel, BoxLayout.Y_AXIS));
-        contactPanel.setBackground(StudentDashboard.CARD_BG);
-        contactPanel.setBorder(new CompoundBorder(
-                new LineBorder(StudentDashboard.BORDER, 1, true),
-                new EmptyBorder(20, 20, 20, 20)
-        ));
-        contactPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 220));
+        JPanel contactPanel = createCardPanel("Contact Information");
+        contactPanel.setLayout(new BorderLayout());
 
-        JLabel title = new JLabel("Contact Information");
-        title.setFont(new Font("Segoe UI", Font.BOLD, 22));
-        title.setForeground(StudentDashboard.DARK_TEXT);
+        JPanel content = new JPanel();
+        content.setOpaque(false);
+        content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
+        content.setBorder(new EmptyBorder(20, 0, 0, 0));
 
-        JLabel line1 = createBodyLabel("CSUSM Veterans Services");
-        JLabel line2 = createBodyLabel("333 S. Twin Oaks Valley Rd");
-        JLabel line3 = createBodyLabel("San Marcos, CA 92096");
-        JLabel line4 = createBodyLabel("Phone: (760) 750-4827");
-        JLabel line5 = createBodyLabel("Email: veterans@csusm.edu");
-        JLabel line6 = createBodyLabel("Hours: Monday–Thursday 8am–5pm");
-        JLabel line7 = createBodyLabel("Friday: 8am–4pm");
+        content.add(createBodyLabel("CSUSM Veterans Services"));
+        content.add(Box.createRigidArea(new Dimension(0, 6)));
+        content.add(createBodyLabel("The Epstein Family Veterans Center"));
+        content.add(Box.createRigidArea(new Dimension(0, 6)));
+        content.add(createBodyLabel("333 S. Twin Oaks Valley Rd"));
+        content.add(createBodyLabel("San Marcos, CA 92096"));
+        content.add(Box.createRigidArea(new Dimension(0, 10)));
+        content.add(createBodyLabel("Phone: (760) 750-4827"));
+        content.add(createBodyLabel("Email: veterans@csusm.edu"));
+        content.add(Box.createRigidArea(new Dimension(0, 10)));
+        content.add(createBodyLabel("Hours: Monday–Thursday 8am–5pm"));
+        content.add(createBodyLabel("Friday: 8am–4pm"));
 
-        contactPanel.add(title);
-        contactPanel.add(Box.createRigidArea(new Dimension(0, 15)));
-        contactPanel.add(line1);
-        contactPanel.add(Box.createRigidArea(new Dimension(0, 6)));
-        contactPanel.add(line2);
-        contactPanel.add(line3);
-        contactPanel.add(Box.createRigidArea(new Dimension(0, 10)));
-        contactPanel.add(line4);
-        contactPanel.add(line5);
-        contactPanel.add(Box.createRigidArea(new Dimension(0, 10)));
-        contactPanel.add(line6);
-        contactPanel.add(line7);
-
+        contactPanel.add(content, BorderLayout.CENTER);
         return contactPanel;
     }
 
     private JPanel createInformationPanel() {
-        JPanel infoPanel = new JPanel();
-        infoPanel.setLayout(new BoxLayout(infoPanel, BoxLayout.Y_AXIS));
-        infoPanel.setBackground(StudentDashboard.CARD_BG);
-        infoPanel.setBorder(new CompoundBorder(
-                new LineBorder(StudentDashboard.BORDER, 1, true),
-                new EmptyBorder(20, 20, 20, 20)
-        ));
-        infoPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 300));
+        JPanel infoPanel = createCardPanel("VetConnect Information");
+        infoPanel.setLayout(new BorderLayout());
 
-        JLabel title = new JLabel("VetConnect Information");
-        title.setFont(new Font("Segoe UI", Font.BOLD, 22));
-        title.setForeground(StudentDashboard.DARK_TEXT);
+        JPanel content = new JPanel();
+        content.setOpaque(false);
+        content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
+        content.setBorder(new EmptyBorder(20, 0, 0, 0));
 
-        JLabel p1 = createBodyLabel("VetConnect allows students using VA education benefits");
-        JLabel p2 = createBodyLabel("to request and manage certification of their courses.");
+        JLabel p1 = createWrappedBodyLabel(
+                "VetConnect allows students using VA education benefits to request and manage certification of their courses."
+        );
 
         JLabel supportedTitle = new JLabel("Through this system you can:");
         supportedTitle.setFont(new Font("Segoe UI", Font.BOLD, 16));
@@ -261,32 +252,237 @@ public class HomePagePanel extends JPanel {
         JLabel b3 = createBodyLabel("• Track certification processing status");
         JLabel b4 = createBodyLabel("• View previously submitted requests");
 
-        JLabel footer = createBodyLabel("If you have questions regarding VA education benefits,");
-        JLabel footer2 = createBodyLabel("please contact the Veterans Center using the information above.");
+        JLabel footer = createWrappedBodyLabel(
+                "If you have questions regarding VA education benefits, please contact the Veterans Center using the information above."
+        );
 
-        infoPanel.add(title);
-        infoPanel.add(Box.createRigidArea(new Dimension(0, 15)));
-        infoPanel.add(p1);
-        infoPanel.add(p2);
-        infoPanel.add(Box.createRigidArea(new Dimension(0, 18)));
-        infoPanel.add(supportedTitle);
-        infoPanel.add(Box.createRigidArea(new Dimension(0, 10)));
-        infoPanel.add(b1);
-        infoPanel.add(b2);
-        infoPanel.add(b3);
-        infoPanel.add(b4);
-        infoPanel.add(Box.createRigidArea(new Dimension(0, 18)));
-        infoPanel.add(footer);
-        infoPanel.add(footer2);
+        content.add(p1);
+        content.add(Box.createRigidArea(new Dimension(0, 18)));
+        content.add(supportedTitle);
+        content.add(Box.createRigidArea(new Dimension(0, 10)));
+        content.add(b1);
+        content.add(b2);
+        content.add(b3);
+        content.add(b4);
+        content.add(Box.createRigidArea(new Dimension(0, 18)));
+        content.add(footer);
 
+        infoPanel.add(content, BorderLayout.CENTER);
         return infoPanel;
+    }
+
+    private JPanel createBenefitsSection() {
+        JPanel sectionPanel = createCardPanel("VA Benefit Information");
+        sectionPanel.setLayout(new BorderLayout());
+
+        JPanel stacked = new JPanel();
+        stacked.setOpaque(false);
+        stacked.setLayout(new BoxLayout(stacked, BoxLayout.Y_AXIS));
+        stacked.setBorder(new EmptyBorder(20, 0, 0, 0));
+
+        stacked.add(createBenefitCard(
+                "CH33 – Post-9/11 GI Bill",
+                new String[]{
+                        "Covers tuition and fees paid directly to the school",
+                        "Monthly housing allowance based on location",
+                        "Annual book stipend (up to $1,000 per year)"
+                },
+                "https://www.va.gov/education/about-gi-bill-benefits/post-9-11/"
+        ));
+        stacked.add(Box.createRigidArea(new Dimension(0, 18)));
+
+        stacked.add(createBenefitCard(
+                "CH33D – Transferred Benefits",
+                new String[]{
+                        "Benefits transferred from a service member to a dependent",
+                        "Requires VA approval and time-in-service requirements",
+                        "Same benefits as standard Post-9/11 GI Bill"
+                },
+                "https://www.va.gov/education/transfer-post-9-11-gi-bill-benefits/"
+        ));
+        stacked.add(Box.createRigidArea(new Dimension(0, 18)));
+
+        stacked.add(createBenefitCard(
+                "CH31 – Veteran Readiness & Employment (VR&E)",
+                new String[]{
+                        "Supports veterans with service-connected disabilities",
+                        "Provides tuition, supplies, and career counseling",
+                        "Purchase Orders issued by VR&E counselors"
+                },
+                "https://www.va.gov/careers-employment/vocational-rehabilitation/"
+        ));
+        stacked.add(Box.createRigidArea(new Dimension(0, 18)));
+
+        stacked.add(createBenefitCard(
+                "CH35 – Dependents' Educational Assistance (DEA)",
+                new String[]{
+                        "Education benefits for dependents of disabled or fallen veterans",
+                        "Up to 36 months of support for schooling or training",
+                        "Monthly payment directly to the student",
+                        "Tuition not covered, paired with CALVET"
+                },
+                "https://www.va.gov/education/survivor-dependent-benefits/dependents-education-assistance/"
+        ));
+
+        sectionPanel.add(stacked, BorderLayout.CENTER);
+        return sectionPanel;
+    }
+
+    private JPanel createBenefitCard(String title, String[] bullets, String url) {
+        JPanel card = new JPanel(new BorderLayout());
+        card.setOpaque(true);
+        card.setBackground(StudentDashboard.CARD_BG);
+        card.setBorder(new CompoundBorder(
+                new LineBorder(StudentDashboard.NAVY, 2, true),
+                new EmptyBorder(16, 16, 16, 16)
+        ));
+        card.setMaximumSize(new Dimension(Integer.MAX_VALUE, 220));
+
+        JLabel titleLabel = new JLabel(title);
+        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 18));
+        titleLabel.setForeground(StudentDashboard.NAVY);
+
+        JPanel body = new JPanel();
+        body.setOpaque(false);
+        body.setLayout(new BoxLayout(body, BoxLayout.Y_AXIS));
+        body.setBorder(new EmptyBorder(12, 0, 0, 0));
+
+        for (String bullet : bullets) {
+            body.add(createBodyLabel("• " + bullet));
+            body.add(Box.createRigidArea(new Dimension(0, 4)));
+        }
+
+        JButton linkButton = new JButton("Click here for more information →");
+        linkButton.setFont(new Font("Segoe UI", Font.PLAIN, 15));
+        linkButton.setForeground(Color.BLUE);
+        linkButton.setBackground(StudentDashboard.CARD_BG);
+        linkButton.setBorderPainted(false);
+        linkButton.setFocusPainted(false);
+        linkButton.setContentAreaFilled(false);
+        linkButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        linkButton.setAlignmentX(Component.LEFT_ALIGNMENT);
+        linkButton.addActionListener(e -> openLink(url));
+
+        JPanel bottom = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 10));
+        bottom.setOpaque(false);
+        bottom.add(linkButton);
+
+        card.add(titleLabel, BorderLayout.NORTH);
+        card.add(body, BorderLayout.CENTER);
+        card.add(bottom, BorderLayout.SOUTH);
+
+        return card;
+    }
+
+    private JPanel createFullTimeUnitsPanel() {
+        JPanel panel = createCardPanel("HOW MANY UNITS ARE CONSIDERED FULL TIME?");
+        panel.setLayout(new BorderLayout());
+
+        JPanel content = new JPanel(new BorderLayout());
+        content.setOpaque(false);
+        content.setBorder(new EmptyBorder(20, 0, 0, 0));
+
+        String[] columns = {"", "16 weeks", "8 weeks", "6 weeks", "4 weeks", "Pay Status"};
+        Object[][] data = {
+                {"Units", "12", "6", "4", "3", "Full Time"},
+                {"", "9", "4", "3", "2", "3/4 Time"},
+                {"", "7", "3", "2.5", "1.5", ">1/2 Time"},
+                {"No BAH", "6", "2", "1", "1", "<= 1/2 Time"}
+        };
+
+        JTable table = new JTable(new DefaultTableModel(data, columns) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        });
+
+        table.setRowHeight(34);
+        table.setFont(new Font("Segoe UI", Font.PLAIN, 15));
+        table.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 15));
+        table.getTableHeader().setBackground(new Color(230, 236, 242));
+        table.getTableHeader().setForeground(StudentDashboard.DARK_TEXT);
+        table.setGridColor(StudentDashboard.BORDER);
+        table.setSelectionBackground(new Color(220, 240, 245));
+        table.setEnabled(false);
+        table.setFillsViewportHeight(true);
+
+        table.getColumnModel().getColumn(0).setPreferredWidth(110);
+        table.getColumnModel().getColumn(1).setPreferredWidth(90);
+        table.getColumnModel().getColumn(2).setPreferredWidth(90);
+        table.getColumnModel().getColumn(3).setPreferredWidth(90);
+        table.getColumnModel().getColumn(4).setPreferredWidth(90);
+        table.getColumnModel().getColumn(5).setPreferredWidth(140);
+
+        JScrollPane scrollPane = new JScrollPane(table);
+        scrollPane.setBorder(new LineBorder(StudentDashboard.BORDER, 1, true));
+        scrollPane.setPreferredSize(new Dimension(900, 170));
+        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+
+        JLabel note = createWrappedBodyLabel(
+                "Note: Post 9/11 Education Benefit® pays to the nearest 10% of the student status. For example, if you are considered 3/4 time (75%), the VA will pay 80% of the full-time BAH rate."
+        );
+        note.setBorder(new EmptyBorder(12, 0, 0, 0));
+
+        content.add(scrollPane, BorderLayout.CENTER);
+        content.add(note, BorderLayout.SOUTH);
+
+        panel.add(content, BorderLayout.CENTER);
+        return panel;
+    }
+
+    private JPanel createCardPanel(String title) {
+        JPanel panel = new JPanel();
+        panel.setBackground(StudentDashboard.CARD_BG);
+        panel.setBorder(new CompoundBorder(
+                new LineBorder(StudentDashboard.BORDER, 1, true),
+                new EmptyBorder(20, 20, 20, 20)
+        ));
+        panel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
+
+        JLabel titleLabel = new JLabel(title);
+        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 22));
+        titleLabel.setForeground(StudentDashboard.DARK_TEXT);
+
+        panel.setLayout(new BorderLayout());
+        panel.add(titleLabel, BorderLayout.NORTH);
+
+        return panel;
     }
 
     private JLabel createBodyLabel(String text) {
         JLabel label = new JLabel(text);
         label.setFont(new Font("Segoe UI", Font.PLAIN, 16));
         label.setForeground(StudentDashboard.DARK_TEXT);
+        label.setAlignmentX(Component.LEFT_ALIGNMENT);
         return label;
+    }
+
+    private JLabel createWrappedBodyLabel(String text) {
+        JLabel label = new JLabel("<html><div style='width:900px;'>" + text + "</div></html>");
+        label.setFont(new Font("Segoe UI", Font.PLAIN, 16));
+        label.setForeground(StudentDashboard.DARK_TEXT);
+        label.setAlignmentX(Component.LEFT_ALIGNMENT);
+        return label;
+    }
+
+    private void openLink(String url) {
+        try {
+            if (Desktop.isDesktopSupported()) {
+                Desktop.getDesktop().browse(new URI(url));
+            } else {
+                JOptionPane.showMessageDialog(this,
+                        "Desktop browsing is not supported on this system.",
+                        "Unable to Open Link",
+                        JOptionPane.WARNING_MESSAGE);
+            }
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this,
+                    "Unable to open link:\n" + url,
+                    "Link Error",
+                    JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     private static class DashboardSummary {

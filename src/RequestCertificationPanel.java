@@ -22,9 +22,11 @@ public class RequestCertificationPanel extends JPanel {
     private JComboBox<String> termComboBox;
     private JComboBox<String> benefitTypeComboBox;
 
+    private JTextField sectionNumberField;
     private JTextField prefixField;
     private JTextField courseNumberField;
-    private JTextField classNumberField;
+    private JTextField titleField;
+    private JTextField crnField;
     private JTextField unitsField;
     private JTextField lengthField;
 
@@ -73,9 +75,9 @@ public class RequestCertificationPanel extends JPanel {
         scrollPane.setBorder(null);
         scrollPane.getVerticalScrollBar().setUnitIncrement(16);
         scrollPane.getViewport().setBackground(StudentDashboard.LIGHT_BG);
+        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
 
         centerContent.add(scrollPane, BorderLayout.CENTER);
-
         add(centerContent, BorderLayout.CENTER);
     }
 
@@ -106,19 +108,23 @@ public class RequestCertificationPanel extends JPanel {
         JPanel entryPanel = createCardPanel("Course Entry");
         entryPanel.setLayout(new BorderLayout());
 
-        JPanel formPanel = new JPanel(new GridLayout(3, 2, 20, 12));
+        JPanel formPanel = new JPanel(new GridLayout(4, 2, 20, 12));
         formPanel.setOpaque(false);
         formPanel.setBorder(new EmptyBorder(20, 0, 0, 0));
 
+        sectionNumberField = new JTextField();
         prefixField = new JTextField();
         courseNumberField = new JTextField();
-        classNumberField = new JTextField();
+        titleField = new JTextField();
+        crnField = new JTextField();
         unitsField = new JTextField();
         lengthField = new JTextField();
 
+        formPanel.add(createLabeledField("Section Number:", sectionNumberField));
         formPanel.add(createLabeledField("Course Prefix:", prefixField));
         formPanel.add(createLabeledField("Course Number:", courseNumberField));
-        formPanel.add(createLabeledField("Class Number:", classNumberField));
+        formPanel.add(createLabeledField("Title / Course Name:", titleField));
+        formPanel.add(createLabeledField("CRN (5 digits):", crnField));
         formPanel.add(createLabeledField("Units:", unitsField));
         formPanel.add(createLabeledField("Course Length (Weeks):", lengthField));
 
@@ -147,7 +153,16 @@ public class RequestCertificationPanel extends JPanel {
         JPanel tablePanel = createCardPanel("Courses Added");
         tablePanel.setLayout(new BorderLayout());
 
-        String[] columns = {"Prefix", "Course Number", "Class Number", "Units", "Weeks"};
+        String[] columns = {
+                "Section Number",
+                "Course Prefix",
+                "Course Number",
+                "Title / Course Name",
+                "CRN",
+                "Units",
+                "Course Length (Weeks)"
+        };
+
         tableModel = new DefaultTableModel(columns, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
@@ -164,10 +179,19 @@ public class RequestCertificationPanel extends JPanel {
         coursesTable.setSelectionBackground(new Color(220, 240, 245));
         coursesTable.setGridColor(StudentDashboard.BORDER);
         coursesTable.setFillsViewportHeight(true);
+        coursesTable.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+
+        coursesTable.getColumnModel().getColumn(0).setPreferredWidth(110);
+        coursesTable.getColumnModel().getColumn(1).setPreferredWidth(110);
+        coursesTable.getColumnModel().getColumn(2).setPreferredWidth(110);
+        coursesTable.getColumnModel().getColumn(3).setPreferredWidth(240);
+        coursesTable.getColumnModel().getColumn(4).setPreferredWidth(100);
+        coursesTable.getColumnModel().getColumn(5).setPreferredWidth(80);
+        coursesTable.getColumnModel().getColumn(6).setPreferredWidth(150);
 
         JScrollPane scrollPane = new JScrollPane(coursesTable);
         scrollPane.setBorder(new LineBorder(StudentDashboard.BORDER, 1, true));
-        scrollPane.setPreferredSize(new Dimension(800, 180));
+        scrollPane.setPreferredSize(new Dimension(980, 180));
 
         JPanel content = new JPanel(new BorderLayout());
         content.setOpaque(false);
@@ -245,7 +269,6 @@ public class RequestCertificationPanel extends JPanel {
 
         panel.add(label, BorderLayout.NORTH);
         panel.add(field, BorderLayout.CENTER);
-
         return panel;
     }
 
@@ -260,7 +283,6 @@ public class RequestCertificationPanel extends JPanel {
 
         panel.add(label, BorderLayout.NORTH);
         panel.add(valueLabel, BorderLayout.CENTER);
-
         return panel;
     }
 
@@ -306,14 +328,16 @@ public class RequestCertificationPanel extends JPanel {
     }
 
     private void addClassToTable() {
-        String prefix = prefixField.getText().trim();
+        String sectionNumber = sectionNumberField.getText().trim().toUpperCase();
+        String prefix = prefixField.getText().trim().toUpperCase();
         String courseNumber = courseNumberField.getText().trim();
-        String classNumber = classNumberField.getText().trim();
+        String title = titleField.getText().trim();
+        String crn = crnField.getText().trim();
         String units = unitsField.getText().trim();
         String length = lengthField.getText().trim();
 
-        if (prefix.isEmpty() || courseNumber.isEmpty() || classNumber.isEmpty()
-                || units.isEmpty() || length.isEmpty()) {
+        if (sectionNumber.isEmpty() || prefix.isEmpty() || courseNumber.isEmpty()
+                || title.isEmpty() || crn.isEmpty() || units.isEmpty() || length.isEmpty()) {
             JOptionPane.showMessageDialog(this,
                     "Please complete all course fields before adding a class.",
                     "Missing Information",
@@ -321,26 +345,98 @@ public class RequestCertificationPanel extends JPanel {
             return;
         }
 
+        if (sectionNumber.length() > 5) {
+            JOptionPane.showMessageDialog(this,
+                    "Section Number should be short, like 01 or 11A.",
+                    "Invalid Section Number",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        if (prefix.length() > 6) {
+            JOptionPane.showMessageDialog(this,
+                    "Course Prefix is too long.",
+                    "Invalid Course Prefix",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        if (title.length() > 60) {
+            JOptionPane.showMessageDialog(this,
+                    "Course Name is too long.",
+                    "Invalid Course Name",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        if (!crn.matches("\\d{5}")) {
+            JOptionPane.showMessageDialog(this,
+                    "CRN must be exactly 5 digits.",
+                    "Invalid CRN",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
         try {
-            Integer.parseInt(units);
+            Integer.parseInt(courseNumber);
+            Double.parseDouble(units);
             Integer.parseInt(length);
         } catch (NumberFormatException ex) {
             JOptionPane.showMessageDialog(this,
-                    "Units and Course Length must be numeric values.",
+                    "Course Number, Units, and Course Length must be numeric values.",
                     "Invalid Input",
                     JOptionPane.WARNING_MESSAGE);
             return;
         }
 
-        tableModel.addRow(new Object[]{prefix, courseNumber, classNumber, units, length});
+        double unitsValue = Double.parseDouble(units);
+        int weeksValue = Integer.parseInt(length);
 
-        prefixField.setText("");
-        courseNumberField.setText("");
-        classNumberField.setText("");
-        unitsField.setText("");
-        lengthField.setText("");
+        if (unitsValue <= 0 || weeksValue <= 0) {
+            JOptionPane.showMessageDialog(this,
+                    "Units and Course Length must be greater than 0.",
+                    "Invalid Input",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
 
+        if (isDuplicateCourse(sectionNumber, prefix, courseNumber, crn)) {
+            JOptionPane.showMessageDialog(this,
+                    "That course already exists in this certification request.",
+                    "Duplicate Course",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        tableModel.addRow(new Object[]{
+                sectionNumber,
+                prefix,
+                courseNumber,
+                title,
+                crn,
+                stripTrailingZero(unitsValue),
+                String.valueOf(weeksValue)
+        });
+
+        clearCourseEntryFields();
         updateSummary();
+    }
+
+    private boolean isDuplicateCourse(String sectionNumber, String prefix, String courseNumber, String crn) {
+        for (int i = 0; i < tableModel.getRowCount(); i++) {
+            String existingSection = tableModel.getValueAt(i, 0).toString().trim();
+            String existingPrefix = tableModel.getValueAt(i, 1).toString().trim();
+            String existingNumber = tableModel.getValueAt(i, 2).toString().trim();
+            String existingCrn = tableModel.getValueAt(i, 4).toString().trim();
+
+            if (existingSection.equalsIgnoreCase(sectionNumber)
+                    && existingPrefix.equalsIgnoreCase(prefix)
+                    && existingNumber.equals(courseNumber)
+                    && existingCrn.equals(crn)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void removeSelectedClass() {
@@ -360,19 +456,19 @@ public class RequestCertificationPanel extends JPanel {
 
     private void updateSummary() {
         int rowCount = tableModel.getRowCount();
-        int totalUnits = 0;
+        double totalUnits = 0.0;
 
         for (int i = 0; i < rowCount; i++) {
-            totalUnits += Integer.parseInt(tableModel.getValueAt(i, 3).toString());
+            totalUnits += Double.parseDouble(tableModel.getValueAt(i, 5).toString());
         }
 
         totalClassesValue.setText(String.valueOf(rowCount));
-        totalUnitsValue.setText(String.valueOf(totalUnits));
+        totalUnitsValue.setText(stripTrailingZero(totalUnits));
         trainingTimeValue.setText(getTrainingTime(totalUnits));
         allowanceValue.setText(getEstimatedAllowance(totalUnits));
     }
 
-    private String getTrainingTime(int totalUnits) {
+    private String getTrainingTime(double totalUnits) {
         if (totalUnits >= 12) return "Full-Time";
         if (totalUnits >= 9) return "3/4-Time";
         if (totalUnits >= 6) return "Half-Time";
@@ -380,7 +476,7 @@ public class RequestCertificationPanel extends JPanel {
         return "N/A";
     }
 
-    private String getUnitLoadCategory(int totalUnits) {
+    private String getUnitLoadCategory(double totalUnits) {
         if (totalUnits >= 12) return "FullTime";
         if (totalUnits >= 9) return "ThreeQuarterTime";
         if (totalUnits >= 6) return "HalfTime";
@@ -388,7 +484,7 @@ public class RequestCertificationPanel extends JPanel {
         return "LessThanHalfTime";
     }
 
-    private String getEstimatedAllowance(int totalUnits) {
+    private String getEstimatedAllowance(double totalUnits) {
         if (totalUnits >= 12) return "$3,200 / month";
         if (totalUnits >= 9) return "$2,400 / month";
         if (totalUnits >= 6) return "$1,600 / month";
@@ -438,7 +534,7 @@ public class RequestCertificationPanel extends JPanel {
             return;
         }
 
-        int totalUnits = Integer.parseInt(totalUnitsValue.getText());
+        double totalUnits = Double.parseDouble(totalUnitsValue.getText());
         String selectedBenefitType = benefitTypeComboBox.getSelectedItem().toString();
         String selectedTerm = termComboBox.getSelectedItem().toString();
         int academicTermCode = getAcademicTermCode(selectedTerm);
@@ -466,12 +562,14 @@ public class RequestCertificationPanel extends JPanel {
         String insertCourseSql = """
             INSERT INTO course (
                 cert_id,
+                section_number,
                 course_prefix,
                 course_number,
-                section_number,
+                title,
+                crn,
                 units,
                 course_length_weeks
-            ) VALUES (?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """;
 
         try (Connection conn = DriverManager.getConnection(DB_URL)) {
@@ -483,19 +581,16 @@ public class RequestCertificationPanel extends JPanel {
                  PreparedStatement insertRequestPs = conn.prepareStatement(insertRequestSql, PreparedStatement.RETURN_GENERATED_KEYS);
                  PreparedStatement insertCoursePs = conn.prepareStatement(insertCourseSql)) {
 
-                // Update student benefit type
                 updateStudentPs.setString(1, selectedBenefitType);
                 updateStudentPs.setInt(2, Session.getUserId());
                 updateStudentPs.executeUpdate();
 
-                // Insert cert request
                 insertRequestPs.setInt(1, studentId);
                 insertRequestPs.setInt(2, academicTermCode);
                 insertRequestPs.setDouble(3, totalUnits);
                 insertRequestPs.setString(4, unitLoadCategory);
                 insertRequestPs.executeUpdate();
 
-                // Get generated cert_id
                 int certId;
                 try (ResultSet rs = insertRequestPs.getGeneratedKeys()) {
                     if (rs.next()) {
@@ -505,20 +600,23 @@ public class RequestCertificationPanel extends JPanel {
                     }
                 }
 
-                // Insert courses
                 for (int i = 0; i < tableModel.getRowCount(); i++) {
-                    String prefix = tableModel.getValueAt(i, 0).toString();
-                    int courseNumber = Integer.parseInt(tableModel.getValueAt(i, 1).toString());
-                    String sectionNumber = tableModel.getValueAt(i, 2).toString();
-                    double units = Double.parseDouble(tableModel.getValueAt(i, 3).toString());
-                    int weeks = Integer.parseInt(tableModel.getValueAt(i, 4).toString());
+                    String sectionNumber = tableModel.getValueAt(i, 0).toString();
+                    String prefix = tableModel.getValueAt(i, 1).toString();
+                    int courseNumber = Integer.parseInt(tableModel.getValueAt(i, 2).toString());
+                    String title = tableModel.getValueAt(i, 3).toString();
+                    String crn = tableModel.getValueAt(i, 4).toString();
+                    double units = Double.parseDouble(tableModel.getValueAt(i, 5).toString());
+                    int weeks = Integer.parseInt(tableModel.getValueAt(i, 6).toString());
 
                     insertCoursePs.setInt(1, certId);
-                    insertCoursePs.setString(2, prefix);
-                    insertCoursePs.setInt(3, courseNumber);
-                    insertCoursePs.setString(4, sectionNumber);
-                    insertCoursePs.setDouble(5, units);
-                    insertCoursePs.setInt(6, weeks);
+                    insertCoursePs.setString(2, sectionNumber);
+                    insertCoursePs.setString(3, prefix);
+                    insertCoursePs.setInt(4, courseNumber);
+                    insertCoursePs.setString(5, title);
+                    insertCoursePs.setString(6, crn);
+                    insertCoursePs.setDouble(7, units);
+                    insertCoursePs.setInt(8, weeks);
                     insertCoursePs.executeUpdate();
                 }
 
@@ -548,13 +646,25 @@ public class RequestCertificationPanel extends JPanel {
         }
     }
 
-    private void clearForm() {
+    private String stripTrailingZero(double value) {
+        if (value == (long) value) {
+            return String.valueOf((long) value);
+        }
+        return String.valueOf(value);
+    }
+
+    private void clearCourseEntryFields() {
+        sectionNumberField.setText("");
         prefixField.setText("");
         courseNumberField.setText("");
-        classNumberField.setText("");
+        titleField.setText("");
+        crnField.setText("");
         unitsField.setText("");
         lengthField.setText("");
+    }
 
+    private void clearForm() {
+        clearCourseEntryFields();
         tableModel.setRowCount(0);
         totalClassesValue.setText("0");
         totalUnitsValue.setText("0");

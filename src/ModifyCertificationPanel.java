@@ -16,9 +16,11 @@ public class ModifyCertificationPanel extends JPanel {
     private JTable coursesTable;
     private DefaultTableModel tableModel;
 
+    private JTextField sectionNumberField;
     private JTextField prefixField;
     private JTextField courseNumberField;
-    private JTextField classNumberField;
+    private JTextField titleField;
+    private JTextField crnField;
     private JTextField unitsField;
     private JTextField lengthField;
 
@@ -32,10 +34,13 @@ public class ModifyCertificationPanel extends JPanel {
     private JLabel currentTermValueLabel;
     private JLabel benefitTypeValueLabel;
 
-    private HomePagePanel homePagePanel;
+    private JTextArea scoErrorMessageArea;
+
+    private final HomePagePanel homePagePanel;
 
     private int currentCertId = 0;
     private int currentStudentId = 0;
+    private boolean cancelRequested = false;
 
     public ModifyCertificationPanel(HomePagePanel homePagePanel) {
         this.homePagePanel = homePagePanel;
@@ -67,6 +72,8 @@ public class ModifyCertificationPanel extends JPanel {
         upperSection.add(Box.createRigidArea(new Dimension(0, 20)));
         upperSection.add(createModifyCoursesPanel());
         upperSection.add(Box.createRigidArea(new Dimension(0, 20)));
+        upperSection.add(createErrorMessagePanel());
+        upperSection.add(Box.createRigidArea(new Dimension(0, 20)));
         upperSection.add(createSummaryPanel());
 
         JPanel upperWrapper = new JPanel(new BorderLayout());
@@ -77,6 +84,7 @@ public class ModifyCertificationPanel extends JPanel {
         scrollPane.setBorder(null);
         scrollPane.getVerticalScrollBar().setUnitIncrement(16);
         scrollPane.getViewport().setBackground(StudentDashboard.LIGHT_BG);
+        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
 
         centerContent.add(scrollPane, BorderLayout.CENTER);
         add(centerContent, BorderLayout.CENTER);
@@ -114,7 +122,15 @@ public class ModifyCertificationPanel extends JPanel {
         JPanel panel = createCardPanel("Currently Certified Courses");
         panel.setLayout(new BorderLayout());
 
-        String[] columns = {"Prefix", "Course Number", "Class Number", "Units", "Weeks"};
+        String[] columns = {
+                "Section Number",
+                "Course Prefix",
+                "Course Number",
+                "Title / Course Name",
+                "CRN",
+                "Units",
+                "Course Length (Weeks)"
+        };
 
         tableModel = new DefaultTableModel(columns, 0) {
             @Override
@@ -132,10 +148,19 @@ public class ModifyCertificationPanel extends JPanel {
         coursesTable.setSelectionBackground(new Color(220, 240, 245));
         coursesTable.setGridColor(StudentDashboard.BORDER);
         coursesTable.setFillsViewportHeight(true);
+        coursesTable.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+
+        coursesTable.getColumnModel().getColumn(0).setPreferredWidth(110);
+        coursesTable.getColumnModel().getColumn(1).setPreferredWidth(110);
+        coursesTable.getColumnModel().getColumn(2).setPreferredWidth(110);
+        coursesTable.getColumnModel().getColumn(3).setPreferredWidth(240);
+        coursesTable.getColumnModel().getColumn(4).setPreferredWidth(100);
+        coursesTable.getColumnModel().getColumn(5).setPreferredWidth(80);
+        coursesTable.getColumnModel().getColumn(6).setPreferredWidth(150);
 
         JScrollPane scrollPane = new JScrollPane(coursesTable);
         scrollPane.setBorder(new LineBorder(StudentDashboard.BORDER, 1, true));
-        scrollPane.setPreferredSize(new Dimension(800, 180));
+        scrollPane.setPreferredSize(new Dimension(980, 180));
 
         JPanel content = new JPanel(new BorderLayout());
         content.setOpaque(false);
@@ -143,7 +168,6 @@ public class ModifyCertificationPanel extends JPanel {
         content.add(scrollPane, BorderLayout.CENTER);
 
         panel.add(content, BorderLayout.CENTER);
-
         return panel;
     }
 
@@ -151,19 +175,23 @@ public class ModifyCertificationPanel extends JPanel {
         JPanel panel = createCardPanel("Modify Courses");
         panel.setLayout(new BorderLayout());
 
-        JPanel formPanel = new JPanel(new GridLayout(3, 2, 20, 12));
+        JPanel formPanel = new JPanel(new GridLayout(4, 2, 20, 12));
         formPanel.setOpaque(false);
         formPanel.setBorder(new EmptyBorder(20, 0, 0, 0));
 
+        sectionNumberField = new JTextField();
         prefixField = new JTextField();
         courseNumberField = new JTextField();
-        classNumberField = new JTextField();
+        titleField = new JTextField();
+        crnField = new JTextField();
         unitsField = new JTextField();
         lengthField = new JTextField();
 
+        formPanel.add(createLabeledField("Section Number:", sectionNumberField));
         formPanel.add(createLabeledField("Course Prefix:", prefixField));
         formPanel.add(createLabeledField("Course Number:", courseNumberField));
-        formPanel.add(createLabeledField("Class Number:", classNumberField));
+        formPanel.add(createLabeledField("Title / Course Name:", titleField));
+        formPanel.add(createLabeledField("CRN (5 digits):", crnField));
         formPanel.add(createLabeledField("Units:", unitsField));
         formPanel.add(createLabeledField("Course Length (Weeks):", lengthField));
 
@@ -187,6 +215,32 @@ public class ModifyCertificationPanel extends JPanel {
         return panel;
     }
 
+    private JPanel createErrorMessagePanel() {
+        JPanel panel = createCardPanel("SCO Error / Action Needed Message");
+        panel.setLayout(new BorderLayout());
+
+        scoErrorMessageArea = new JTextArea(4, 40);
+        scoErrorMessageArea.setEditable(false);
+        scoErrorMessageArea.setLineWrap(true);
+        scoErrorMessageArea.setWrapStyleWord(true);
+        scoErrorMessageArea.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        scoErrorMessageArea.setForeground(new Color(140, 25, 25));
+        scoErrorMessageArea.setBackground(new Color(255, 244, 244));
+        scoErrorMessageArea.setText("No current SCO error message.");
+
+        JScrollPane scrollPane = new JScrollPane(scoErrorMessageArea);
+        scrollPane.setBorder(new LineBorder(new Color(225, 170, 170), 1, true));
+        scrollPane.setPreferredSize(new Dimension(900, 110));
+
+        JPanel content = new JPanel(new BorderLayout());
+        content.setOpaque(false);
+        content.setBorder(new EmptyBorder(20, 0, 0, 0));
+        content.add(scrollPane, BorderLayout.CENTER);
+
+        panel.add(content, BorderLayout.CENTER);
+        return panel;
+    }
+
     private JPanel createSummaryPanel() {
         JPanel panel = createCardPanel("Updated Certification Summary");
         panel.setLayout(new BorderLayout());
@@ -206,15 +260,18 @@ public class ModifyCertificationPanel extends JPanel {
         infoPanel.add(createLabeledValue("Estimated Allowance:", allowanceValue));
 
         JButton submitButton = createSubmitButton("Submit Modified Certification");
-        JButton cancelButton = createCancelButton("Discard Unsaved Changes");
+        JButton discardButton = createNeutralButton("Discard Unsaved Changes");
+        JButton cancelCertificationButton = createDeleteButton("Cancel Certification");
 
         submitButton.addActionListener(e -> submitModifiedCertification());
-        cancelButton.addActionListener(e -> discardChanges());
+        discardButton.addActionListener(e -> discardChanges());
+        cancelCertificationButton.addActionListener(e -> cancelCertification());
 
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 15));
         buttonPanel.setOpaque(false);
         buttonPanel.add(submitButton);
-        buttonPanel.add(cancelButton);
+        buttonPanel.add(discardButton);
+        buttonPanel.add(cancelCertificationButton);
 
         JPanel wrapper = new JPanel(new BorderLayout());
         wrapper.setOpaque(false);
@@ -321,7 +378,24 @@ public class ModifyCertificationPanel extends JPanel {
         return button;
     }
 
-    private JButton createCancelButton(String text) {
+    private JButton createNeutralButton(String text) {
+        JButton button = new JButton(text);
+        button.setFocusPainted(false);
+        button.setBackground(new Color(108, 117, 125));
+        button.setForeground(Color.WHITE);
+        button.setFont(new Font("Segoe UI", Font.BOLD, 15));
+        button.setOpaque(true);
+        button.setContentAreaFilled(true);
+        button.setBorderPainted(false);
+        button.setBorder(new CompoundBorder(
+                new LineBorder(new Color(80, 85, 90), 1, true),
+                new EmptyBorder(12, 18, 12, 18)
+        ));
+        button.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        return button;
+    }
+
+    private JButton createDeleteButton(String text) {
         JButton button = new JButton(text);
         button.setFocusPainted(false);
         button.setBackground(new Color(178, 34, 34));
@@ -341,14 +415,17 @@ public class ModifyCertificationPanel extends JPanel {
     private void loadCurrentCertification() {
         currentCertId = 0;
         currentStudentId = 0;
+        cancelRequested = false;
 
         requestIdValueLabel.setText("N/A");
         currentTermValueLabel.setText("N/A");
         benefitTypeValueLabel.setText("N/A");
         statusValue.setText("N/A");
         statusValue.setForeground(new Color(180, 120, 20));
-
+        scoErrorMessageArea.setText("No current SCO error message.");
         tableModel.setRowCount(0);
+
+        clearEntryFields();
 
         int userId = Session.getUserId();
         if (userId == 0) {
@@ -363,7 +440,8 @@ public class ModifyCertificationPanel extends JPanel {
                 """;
 
         String requestQuery = """
-                SELECT cert_id, academic_term_code, status
+                SELECT cert_id, academic_term_code, status, COALESCE(sco_note, '') AS sco_note,
+                       COALESCE(cancel_requested, 0) AS cancel_requested
                 FROM cert_request
                 WHERE student_id = ?
                 ORDER BY last_updated_date DESC, cert_id DESC
@@ -371,7 +449,7 @@ public class ModifyCertificationPanel extends JPanel {
                 """;
 
         String coursesQuery = """
-                SELECT course_prefix, course_number, section_number, units, course_length_weeks
+                SELECT section_number, course_prefix, course_number, title, crn, units, course_length_weeks
                 FROM course
                 WHERE cert_id = ?
                 ORDER BY course_prefix, course_number, section_number
@@ -416,6 +494,17 @@ public class ModifyCertificationPanel extends JPanel {
                     String status = rs.getString("status");
                     statusValue.setText(status);
                     applyStatusColor(status);
+
+                    String scoNote = rs.getString("sco_note");
+                    cancelRequested = rs.getInt("cancel_requested") == 1;
+
+                    if (cancelRequested) {
+                        scoErrorMessageArea.setText("Cancellation request submitted. Waiting for SCO approval.");
+                    } else if (scoNote != null && !scoNote.isBlank()) {
+                        scoErrorMessageArea.setText(scoNote);
+                    } else {
+                        scoErrorMessageArea.setText("No current SCO error message.");
+                    }
                 }
             }
 
@@ -425,9 +514,11 @@ public class ModifyCertificationPanel extends JPanel {
                 try (ResultSet rs = pstmt.executeQuery()) {
                     while (rs.next()) {
                         tableModel.addRow(new Object[]{
+                                rs.getString("section_number"),
                                 rs.getString("course_prefix"),
                                 String.valueOf(rs.getInt("course_number")),
-                                rs.getString("section_number"),
+                                rs.getString("title"),
+                                rs.getString("crn"),
                                 stripTrailingZero(rs.getDouble("units")),
                                 String.valueOf(rs.getInt("course_length_weeks"))
                         });
@@ -458,6 +549,8 @@ public class ModifyCertificationPanel extends JPanel {
             case "In Review" -> statusValue.setForeground(new Color(40, 90, 180));
             case "Action Needed" -> statusValue.setForeground(new Color(178, 34, 34));
             case "Approved", "Certified" -> statusValue.setForeground(new Color(34, 139, 34));
+            case "Cancellation Pending" -> statusValue.setForeground(new Color(128, 0, 128));
+            case "Cancelled" -> statusValue.setForeground(new Color(120, 120, 120));
             default -> statusValue.setForeground(new Color(180, 120, 20));
         }
     }
@@ -471,17 +564,35 @@ public class ModifyCertificationPanel extends JPanel {
             return;
         }
 
+        if (cancelRequested) {
+            JOptionPane.showMessageDialog(this,
+                    "This certification is pending cancellation and cannot be modified.",
+                    "Cancellation Pending",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        String sectionNumber = sectionNumberField.getText().trim().toUpperCase();
         String prefix = prefixField.getText().trim().toUpperCase();
         String courseNumber = courseNumberField.getText().trim();
-        String classNumber = classNumberField.getText().trim();
+        String title = titleField.getText().trim();
+        String crn = crnField.getText().trim();
         String units = unitsField.getText().trim();
         String length = lengthField.getText().trim();
 
-        if (prefix.isEmpty() || courseNumber.isEmpty() || classNumber.isEmpty()
-                || units.isEmpty() || length.isEmpty()) {
+        if (sectionNumber.isEmpty() || prefix.isEmpty() || courseNumber.isEmpty()
+                || title.isEmpty() || crn.isEmpty() || units.isEmpty() || length.isEmpty()) {
             JOptionPane.showMessageDialog(this,
                     "Please complete all course fields before adding a class.",
                     "Missing Information",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        if (!crn.matches("\\d{5}")) {
+            JOptionPane.showMessageDialog(this,
+                    "CRN must be exactly 5 digits.",
+                    "Invalid CRN",
                     JOptionPane.WARNING_MESSAGE);
             return;
         }
@@ -498,15 +609,18 @@ public class ModifyCertificationPanel extends JPanel {
             return;
         }
 
-        if (Double.parseDouble(units) < 0 || Integer.parseInt(length) <= 0) {
+        double parsedUnits = Double.parseDouble(units);
+        int parsedWeeks = Integer.parseInt(length);
+
+        if (parsedUnits <= 0 || parsedWeeks <= 0) {
             JOptionPane.showMessageDialog(this,
-                    "Units must be 0 or greater and weeks must be greater than 0.",
+                    "Units and weeks must be greater than 0.",
                     "Invalid Input",
                     JOptionPane.WARNING_MESSAGE);
             return;
         }
 
-        if (isDuplicateCourse(prefix, courseNumber, classNumber)) {
+        if (isDuplicateCourse(sectionNumber, prefix, courseNumber, crn)) {
             JOptionPane.showMessageDialog(this,
                     "That course/section already exists in this certification request.",
                     "Duplicate Course",
@@ -514,26 +628,31 @@ public class ModifyCertificationPanel extends JPanel {
             return;
         }
 
-        tableModel.addRow(new Object[]{prefix, courseNumber, classNumber, units, length});
+        tableModel.addRow(new Object[]{
+                sectionNumber,
+                prefix,
+                courseNumber,
+                title,
+                crn,
+                stripTrailingZero(parsedUnits),
+                String.valueOf(parsedWeeks)
+        });
 
-        prefixField.setText("");
-        courseNumberField.setText("");
-        classNumberField.setText("");
-        unitsField.setText("");
-        lengthField.setText("");
-
+        clearEntryFields();
         updateSummary();
     }
 
-    private boolean isDuplicateCourse(String prefix, String courseNumber, String classNumber) {
+    private boolean isDuplicateCourse(String sectionNumber, String prefix, String courseNumber, String crn) {
         for (int i = 0; i < tableModel.getRowCount(); i++) {
-            String existingPrefix = tableModel.getValueAt(i, 0).toString().trim();
-            String existingCourseNumber = tableModel.getValueAt(i, 1).toString().trim();
-            String existingClassNumber = tableModel.getValueAt(i, 2).toString().trim();
+            String existingSection = tableModel.getValueAt(i, 0).toString().trim();
+            String existingPrefix = tableModel.getValueAt(i, 1).toString().trim();
+            String existingCourseNumber = tableModel.getValueAt(i, 2).toString().trim();
+            String existingCrn = tableModel.getValueAt(i, 4).toString().trim();
 
-            if (existingPrefix.equalsIgnoreCase(prefix)
+            if (existingSection.equalsIgnoreCase(sectionNumber)
+                    && existingPrefix.equalsIgnoreCase(prefix)
                     && existingCourseNumber.equals(courseNumber)
-                    && existingClassNumber.equalsIgnoreCase(classNumber)) {
+                    && existingCrn.equals(crn)) {
                 return true;
             }
         }
@@ -545,6 +664,14 @@ public class ModifyCertificationPanel extends JPanel {
             JOptionPane.showMessageDialog(this,
                     "There is no certification request available to modify.",
                     "No Request Found",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        if (cancelRequested) {
+            JOptionPane.showMessageDialog(this,
+                    "This certification is pending cancellation and cannot be modified.",
+                    "Cancellation Pending",
                     JOptionPane.WARNING_MESSAGE);
             return;
         }
@@ -568,7 +695,7 @@ public class ModifyCertificationPanel extends JPanel {
         double totalUnits = 0.0;
 
         for (int i = 0; i < rowCount; i++) {
-            totalUnits += Double.parseDouble(tableModel.getValueAt(i, 3).toString());
+            totalUnits += Double.parseDouble(tableModel.getValueAt(i, 5).toString());
         }
 
         totalClassesValue.setText(String.valueOf(rowCount));
@@ -589,49 +716,16 @@ public class ModifyCertificationPanel extends JPanel {
         if (totalUnits >= 12) return "FullTime";
         if (totalUnits >= 9) return "ThreeQuarterTime";
         if (totalUnits >= 6) return "HalfTime";
+        if (totalUnits > 0) return "LessThanHalfTime";
         return "LessThanHalfTime";
     }
 
     private String getEstimatedAllowance(double totalUnits) {
-        double baseRate = loadBaseHousingRate();
-
-        double multiplier;
-        if (totalUnits >= 12) {
-            multiplier = 1.00;
-        } else if (totalUnits >= 9) {
-            multiplier = 0.75;
-        } else if (totalUnits >= 6) {
-            multiplier = 0.50;
-        } else if (totalUnits > 0) {
-            multiplier = 0.25;
-        } else {
-            multiplier = 0.0;
-        }
-
-        double allowance = Math.round(baseRate * multiplier * 100.0) / 100.0;
-        return "$" + String.format("%.2f", allowance) + " / month";
-    }
-
-    private double loadBaseHousingRate() {
-        String query = """
-                SELECT base_housing_rate
-                FROM monthly_allowance_config
-                WHERE config_id = 1
-                """;
-
-        try (Connection conn = DriverManager.getConnection(DB_URL);
-             PreparedStatement pstmt = conn.prepareStatement(query);
-             ResultSet rs = pstmt.executeQuery()) {
-
-            if (rs.next()) {
-                return rs.getDouble("base_housing_rate");
-            }
-
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
-
-        return 0.0;
+        if (totalUnits >= 12) return "$3,200 / month";
+        if (totalUnits >= 9) return "$2,400 / month";
+        if (totalUnits >= 6) return "$1,600 / month";
+        if (totalUnits > 0) return "$800 / month";
+        return "$0 / month";
     }
 
     private void submitModifiedCertification() {
@@ -639,6 +733,14 @@ public class ModifyCertificationPanel extends JPanel {
             JOptionPane.showMessageDialog(this,
                     "There is no certification request available to modify.",
                     "No Request Found",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        if (cancelRequested) {
+            JOptionPane.showMessageDialog(this,
+                    "This certification is pending cancellation and cannot be modified.",
+                    "Cancellation Pending",
                     JOptionPane.WARNING_MESSAGE);
             return;
         }
@@ -653,7 +755,7 @@ public class ModifyCertificationPanel extends JPanel {
 
         double totalUnits = 0.0;
         for (int i = 0; i < tableModel.getRowCount(); i++) {
-            totalUnits += Double.parseDouble(tableModel.getValueAt(i, 3).toString());
+            totalUnits += Double.parseDouble(tableModel.getValueAt(i, 5).toString());
         }
 
         String unitLoadCategory = getUnitLoadCategory(totalUnits);
@@ -662,12 +764,14 @@ public class ModifyCertificationPanel extends JPanel {
         String insertCourseSql = """
                 INSERT INTO course (
                     cert_id,
+                    section_number,
                     course_prefix,
                     course_number,
-                    section_number,
+                    title,
+                    crn,
                     units,
                     course_length_weeks
-                ) VALUES (?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """;
 
         String updateRequestSql = """
@@ -677,7 +781,8 @@ public class ModifyCertificationPanel extends JPanel {
                     last_updated_date = CURRENT_TIMESTAMP,
                     total_units = ?,
                     unit_load_category = ?,
-                    is_draft = 0
+                    is_draft = 0,
+                    cancel_requested = 0
                 WHERE cert_id = ?
                 """;
 
@@ -692,18 +797,22 @@ public class ModifyCertificationPanel extends JPanel {
 
                 try (PreparedStatement insertStmt = conn.prepareStatement(insertCourseSql)) {
                     for (int i = 0; i < tableModel.getRowCount(); i++) {
-                        String prefix = tableModel.getValueAt(i, 0).toString().trim().toUpperCase();
-                        int courseNumber = Integer.parseInt(tableModel.getValueAt(i, 1).toString().trim());
-                        String classNumber = tableModel.getValueAt(i, 2).toString().trim();
-                        double units = Double.parseDouble(tableModel.getValueAt(i, 3).toString().trim());
-                        int weeks = Integer.parseInt(tableModel.getValueAt(i, 4).toString().trim());
+                        String sectionNumber = tableModel.getValueAt(i, 0).toString().trim().toUpperCase();
+                        String prefix = tableModel.getValueAt(i, 1).toString().trim().toUpperCase();
+                        int courseNumber = Integer.parseInt(tableModel.getValueAt(i, 2).toString().trim());
+                        String title = tableModel.getValueAt(i, 3).toString().trim();
+                        String crn = tableModel.getValueAt(i, 4).toString().trim();
+                        double units = Double.parseDouble(tableModel.getValueAt(i, 5).toString().trim());
+                        int weeks = Integer.parseInt(tableModel.getValueAt(i, 6).toString().trim());
 
                         insertStmt.setInt(1, currentCertId);
-                        insertStmt.setString(2, prefix);
-                        insertStmt.setInt(3, courseNumber);
-                        insertStmt.setString(4, classNumber);
-                        insertStmt.setDouble(5, units);
-                        insertStmt.setInt(6, weeks);
+                        insertStmt.setString(2, sectionNumber);
+                        insertStmt.setString(3, prefix);
+                        insertStmt.setInt(4, courseNumber);
+                        insertStmt.setString(5, title);
+                        insertStmt.setString(6, crn);
+                        insertStmt.setDouble(7, units);
+                        insertStmt.setInt(8, weeks);
                         insertStmt.addBatch();
                     }
                     insertStmt.executeBatch();
@@ -749,6 +858,75 @@ public class ModifyCertificationPanel extends JPanel {
         }
     }
 
+    private void cancelCertification() {
+        if (currentCertId == 0) {
+            JOptionPane.showMessageDialog(this,
+                    "There is no certification request available to cancel.",
+                    "No Request Found",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        if (cancelRequested) {
+            JOptionPane.showMessageDialog(this,
+                    "A cancellation request has already been submitted for this certification.",
+                    "Already Pending",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        int choice = JOptionPane.showConfirmDialog(
+                this,
+                "Cancel this entire certification request?\n\nThis will send the request to the SCO for cancellation approval.",
+                "Cancel Certification",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE
+        );
+
+        if (choice != JOptionPane.YES_OPTION) {
+            return;
+        }
+
+        String sql = """
+                UPDATE cert_request
+                SET status = 'Cancellation Pending',
+                    cancel_requested = 1,
+                    sco_note = 'Student requested cancellation. Awaiting SCO approval.',
+                    last_updated_date = CURRENT_TIMESTAMP
+                WHERE cert_id = ?
+                """;
+
+        try (Connection conn = DriverManager.getConnection(DB_URL);
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setInt(1, currentCertId);
+            ps.executeUpdate();
+
+            cancelRequested = true;
+            statusValue.setText("Cancellation Pending");
+            applyStatusColor("Cancellation Pending");
+            scoErrorMessageArea.setText("Cancellation request submitted. Waiting for SCO approval.");
+
+            JOptionPane.showMessageDialog(this,
+                    "Certification cancellation request submitted to the SCO.",
+                    "Cancellation Requested",
+                    JOptionPane.INFORMATION_MESSAGE);
+
+            if (homePagePanel != null) {
+                homePagePanel.refreshSummary();
+            }
+
+            refreshData();
+
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            JOptionPane.showMessageDialog(this,
+                    "Failed to submit cancellation request.",
+                    "Database Error",
+                    JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
     private void discardChanges() {
         if (currentCertId == 0) {
             JOptionPane.showMessageDialog(this,
@@ -768,17 +946,21 @@ public class ModifyCertificationPanel extends JPanel {
 
         if (choice == JOptionPane.YES_OPTION) {
             refreshData();
-            prefixField.setText("");
-            courseNumberField.setText("");
-            classNumberField.setText("");
-            unitsField.setText("");
-            lengthField.setText("");
-
             JOptionPane.showMessageDialog(this,
                     "Unsaved changes were discarded.",
                     "Changes Discarded",
                     JOptionPane.INFORMATION_MESSAGE);
         }
+    }
+
+    private void clearEntryFields() {
+        sectionNumberField.setText("");
+        prefixField.setText("");
+        courseNumberField.setText("");
+        titleField.setText("");
+        crnField.setText("");
+        unitsField.setText("");
+        lengthField.setText("");
     }
 
     private String formatAcademicTerm(int academicTermCode) {
