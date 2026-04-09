@@ -2,9 +2,16 @@ import javax.swing.*;
 import javax.swing.border.CompoundBorder;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.LineBorder;
+import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 
 public class SCODashboardHomePanel extends JPanel {
+
+    private static final String DB_URL = "jdbc:sqlite:database.sqlite";
 
     public SCODashboardHomePanel() {
         setBackground(SCODashboard.ADMIN_BG);
@@ -71,9 +78,19 @@ public class SCODashboardHomePanel extends JPanel {
         cardsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
         cardsPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 120));
 
-        cardsPanel.add(createSummaryCard("Pending Requests", "12"));
-        cardsPanel.add(createSummaryCard("In Review", "7"));
-        cardsPanel.add(createSummaryCard("Action Needed", "3"));
+        int pendingCount = getCount(
+                "SELECT COUNT(*) FROM cert_request WHERE status = 'Submitted' AND is_draft = 0"
+        );
+        int inReviewCount = getCount(
+                "SELECT COUNT(*) FROM cert_request WHERE status = 'In Review' AND is_draft = 0"
+        );
+        int actionNeededCount = getCount(
+                "SELECT COUNT(*) FROM cert_request WHERE status = 'Action Needed' AND is_draft = 0"
+        );
+
+        cardsPanel.add(createSummaryCard("Pending Requests", String.valueOf(pendingCount)));
+        cardsPanel.add(createSummaryCard("In Review", String.valueOf(inReviewCount)));
+        cardsPanel.add(createSummaryCard("Action Needed", String.valueOf(actionNeededCount)));
 
         return cardsPanel;
     }
@@ -144,14 +161,40 @@ public class SCODashboardHomePanel extends JPanel {
         content.setBorder(new EmptyBorder(20, 0, 0, 0));
 
         String[] columns = {"Benefit Type", "Full-Time", "3/4-Time", "Half-Time", "Notes"};
-        Object[][] data = {
-                {"CH33", "$3,200", "$2,400", "$1,600", "Post-9/11 GI Bill"},
-                {"CH33D", "$3,200", "$2,400", "$1,600", "Transferred Benefits"},
-                {"CH31", "Varies", "Varies", "Varies", "VR&E rates may differ"},
-                {"CH35", "$1,488", "$1,176", "$862", "DEA monthly student payment"}
+        DefaultTableModel model = new DefaultTableModel(columns, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
         };
 
-        JTable table = new JTable(data, columns);
+        Double baseHousingRate = getBaseHousingRate();
+
+        if (baseHousingRate != null) {
+            model.addRow(new Object[]{
+                    "CH33",
+                    formatMoney(baseHousingRate),
+                    formatMoney(baseHousingRate * 0.75),
+                    formatMoney(baseHousingRate * 0.50),
+                    "Calculated from monthly_allowance_config"
+            });
+
+            model.addRow(new Object[]{
+                    "CH33D",
+                    formatMoney(baseHousingRate),
+                    formatMoney(baseHousingRate * 0.75),
+                    formatMoney(baseHousingRate * 0.50),
+                    "Calculated from monthly_allowance_config"
+            });
+        } else {
+            model.addRow(new Object[]{"CH33", "Not Configured", "Not Configured", "Not Configured", "No base_housing_rate found"});
+            model.addRow(new Object[]{"CH33D", "Not Configured", "Not Configured", "Not Configured", "No base_housing_rate found"});
+        }
+
+        model.addRow(new Object[]{"CH31", "Varies", "Varies", "Varies", "VR&E rates may differ"});
+        model.addRow(new Object[]{"CH35", "Varies", "Varies", "Varies", "Rate not stored in current database"});
+
+        JTable table = new JTable(model);
         table.setRowHeight(28);
         table.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         table.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 14));
@@ -182,8 +225,19 @@ public class SCODashboardHomePanel extends JPanel {
         content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
         content.setBorder(new EmptyBorder(20, 0, 0, 0));
 
-        content.add(createBodyLabel("• Monthly rate values shown on this page are for dashboard reference only."));
-        content.add(createBodyLabel("• Final payment amounts may depend on training time, course length, and VA rules."));
+        int submittedCount = getCount(
+                "SELECT COUNT(*) FROM cert_request WHERE status = 'Submitted' AND is_draft = 0"
+        );
+        int unresolvedErrors = getCount(
+                "SELECT COUNT(*) FROM cert_error WHERE is_resolved = 0"
+        );
+        int approvedCount = getCount(
+                "SELECT COUNT(*) FROM cert_request WHERE status = 'Approved' AND is_draft = 0"
+        );
+
+        content.add(createBodyLabel("• Submitted requests currently in the system: " + submittedCount));
+        content.add(createBodyLabel("• Unresolved certification errors: " + unresolvedErrors));
+        content.add(createBodyLabel("• Approved requests currently in the system: " + approvedCount));
         content.add(createBodyLabel("• CH31 students may also require Purchase Order tracking and bookstore verification."));
         content.add(createBodyLabel("• Certification Errors should be used for requests that require student correction or follow-up."));
         content.add(createBodyLabel("• Manage Requests should be used when searching for a specific student or certification record."));
@@ -228,5 +282,40 @@ public class SCODashboardHomePanel extends JPanel {
         label.setForeground(SCODashboard.DARK_TEXT);
         label.setAlignmentX(Component.LEFT_ALIGNMENT);
         return label;
+    }
+
+    private int getCount(String sql) {
+        try (Connection conn = DriverManager.getConnection(DB_URL);
+             PreparedStatement pstmt = conn.prepareStatement(sql);
+             ResultSet rs = pstmt.executeQuery()) {
+
+            if (rs.next()) {
+                return rs.getInt(1);
+            }
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+        return 0;
+    }
+
+    private Double getBaseHousingRate() {
+        String sql = "SELECT base_housing_rate FROM monthly_allowance_config WHERE config_id = 1";
+
+        try (Connection conn = DriverManager.getConnection(DB_URL);
+             PreparedStatement pstmt = conn.prepareStatement(sql);
+             ResultSet rs = pstmt.executeQuery()) {
+
+            if (rs.next()) {
+                return rs.getDouble("base_housing_rate");
+            }
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+
+        return null;
+    }
+
+    private String formatMoney(double amount) {
+        return String.format("$%,.2f", amount);
     }
 }

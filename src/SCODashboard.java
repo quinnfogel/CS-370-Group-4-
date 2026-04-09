@@ -6,9 +6,9 @@ import java.awt.*;
 
 public class SCODashboard extends JFrame {
 
-    public static final Color ADMIN_BG = new Color(234, 244, 238);      // light sage green
-    public static final Color SIDEBAR_GREEN = new Color(63, 107, 74);   // dark muted green
-    public static final Color ACCENT_GREEN = new Color(95, 143, 107);   // medium green
+    public static final Color ADMIN_BG = new Color(234, 244, 238);
+    public static final Color SIDEBAR_GREEN = new Color(63, 107, 74);
+    public static final Color ACCENT_GREEN = new Color(95, 143, 107);
     public static final Color CARD_BG = Color.WHITE;
     public static final Color DARK_TEXT = new Color(33, 37, 41);
     public static final Color BORDER = new Color(207, 216, 211);
@@ -42,15 +42,27 @@ public class SCODashboard extends JFrame {
         JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 8));
         rightPanel.setOpaque(false);
 
-        JLabel welcomeLabel = new JLabel("Welcome, Jordan Hayes");
+        String firstName = Session.getFirstName() != null ? Session.getFirstName() : "";
+        String lastName = Session.getLastName() != null ? Session.getLastName() : "";
+        String fullName = (firstName + " " + lastName).trim();
+        if (fullName.isEmpty()) {
+            fullName = "User";
+        }
+
+        JLabel welcomeLabel = new JLabel("Welcome, " + fullName);
         welcomeLabel.setForeground(Color.WHITE);
         welcomeLabel.setFont(new Font("Segoe UI", Font.PLAIN, 15));
 
-        JLabel roleLabel = new JLabel("Role: SCO");
+        JLabel roleLabel = new JLabel("Role: " + (Session.getRole() != null ? Session.getRole() : "SCO"));
         roleLabel.setForeground(Color.WHITE);
         roleLabel.setFont(new Font("Segoe UI", Font.PLAIN, 15));
 
         JButton logoutButton = createLogoutButton("Logout");
+        logoutButton.addActionListener(e -> {
+            Session.clearSession();
+            new login_page().setVisible(true);
+            dispose();
+        });
 
         rightPanel.add(welcomeLabel);
         rightPanel.add(roleLabel);
@@ -115,8 +127,8 @@ public class SCODashboard extends JFrame {
         contentPanel.add(new CertificationErrorsPanel(), "ERRORS");
         contentPanel.add(new SCORequestHistoryPanel(), "HISTORY");
         contentPanel.add(new ManageAccountsPanel(), "MANAGE");
-        cardLayout.show(contentPanel, "HOME");
 
+        cardLayout.show(contentPanel, "HOME");
         return contentPanel;
     }
 

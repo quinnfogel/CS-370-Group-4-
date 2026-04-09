@@ -25,10 +25,9 @@ public class ViewRequestStatusPanel extends JPanel {
     private JLabel totalClassesValue;
     private JLabel totalUnitsValue;
     private JLabel benefitTypeValue;
-    private JPanel statusValuePanel;
+    private JLabel statusValueLabel;
     private JLabel estimatedAllowanceValue;
     private JLabel trainingTimeValue;
-
     private JTextArea scoMessageArea;
 
     private DefaultTableModel coursesTableModel;
@@ -107,7 +106,7 @@ public class ViewRequestStatusPanel extends JPanel {
         totalClassesValue = createValueLabel("0");
         totalUnitsValue = createValueLabel("0");
         benefitTypeValue = createValueLabel("N/A");
-        statusValuePanel = createStatusPanel("Unknown", STATUS_GRAY);
+        statusValueLabel = createStatusLabel("Unknown", STATUS_GRAY);
         estimatedAllowanceValue = createValueLabel("$0.00 / month");
         trainingTimeValue = createValueLabel("—");
 
@@ -127,7 +126,7 @@ public class ViewRequestStatusPanel extends JPanel {
         infoPanel.add(benefitTypeValue);
 
         infoPanel.add(createInfoLabel("Status:"));
-        infoPanel.add(statusValuePanel);
+        infoPanel.add(statusValueLabel);
 
         infoPanel.add(createInfoLabel("Estimated Allowance:"));
         infoPanel.add(estimatedAllowanceValue);
@@ -395,43 +394,35 @@ public class ViewRequestStatusPanel extends JPanel {
             default -> STATUS_GRAY;
         };
 
-        Container parent = statusValuePanel.getParent();
-        if (parent != null) {
-            int index = -1;
-            for (int i = 0; i < parent.getComponentCount(); i++) {
-                if (parent.getComponent(i) == statusValuePanel) {
-                    index = i;
-                    break;
-                }
-            }
-
-            if (index != -1) {
-                parent.remove(index);
-                statusValuePanel = createStatusPanel(statusText, color);
-                parent.add(statusValuePanel, index);
-                parent.revalidate();
-                parent.repaint();
-            }
-        } else {
-            statusValuePanel = createStatusPanel(statusText, color);
-        }
-    }
-
-    private JPanel createStatusPanel(String text, Color bgColor) {
-        JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
-        panel.setOpaque(true);
-        panel.setBackground(bgColor);
-        panel.setBorder(new CompoundBorder(
-                new LineBorder(bgColor.darker(), 1, true),
-                new EmptyBorder(4, 10, 4, 10)
+        statusValueLabel.setText(statusText);
+        statusValueLabel.setBackground(color);
+        statusValueLabel.setHorizontalAlignment(SwingConstants.LEFT);
+        statusValueLabel.setBorder(new CompoundBorder(
+                new LineBorder(color.darker(), 1, true),
+                new EmptyBorder(4, 8, 4, 8)
         ));
 
-        JLabel label = new JLabel(text);
-        label.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        label.setForeground(Color.WHITE);
+        Dimension size = statusValueLabel.getPreferredSize();
+        statusValueLabel.setPreferredSize(new Dimension(Math.max(size.width, 90), Math.max(size.height, 26)));
+    }
 
-        panel.add(label);
-        return panel;
+    private JLabel createStatusLabel(String text, Color bgColor) {
+        JLabel label = new JLabel(text);
+        label.setOpaque(true);
+        label.setBackground(bgColor);
+        label.setForeground(Color.WHITE);
+        label.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        label.setHorizontalAlignment(SwingConstants.LEFT);
+        label.setVerticalAlignment(SwingConstants.CENTER);
+        label.setBorder(new CompoundBorder(
+                new LineBorder(bgColor.darker(), 1, true),
+                new EmptyBorder(4, 8, 4, 8)
+        ));
+
+        Dimension size = label.getPreferredSize();
+        label.setPreferredSize(new Dimension(Math.max(size.width, 90), Math.max(size.height, 26)));
+
+        return label;
     }
 
     private JLabel createInfoLabel(String text) {
