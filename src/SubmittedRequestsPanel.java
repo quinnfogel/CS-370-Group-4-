@@ -680,7 +680,7 @@ public class SubmittedRequestsPanel extends JPanel {
 
         switch (month) {
             case "01":
-                return "Spring" + year;
+                return "Spring " + year;
             case "05":
                 return "Summer " + year;
             case "08":
