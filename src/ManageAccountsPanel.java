@@ -4,8 +4,16 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.border.LineBorder;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.security.MessageDigest;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.Statement;
 
 public class ManageAccountsPanel extends JPanel {
+
+    private static final String DB_URL = "jdbc:sqlite:database.sqlite";
 
     private JTable scoTable;
     private DefaultTableModel tableModel;
@@ -17,7 +25,11 @@ public class ManageAccountsPanel extends JPanel {
     private JPasswordField passwordField;
     private JPasswordField confirmPasswordField;
 
-    public ManageAccountsPanel() {
+    private final String currentUserEmail;
+
+    public ManageAccountsPanel(String currentUserEmail) {
+        this.currentUserEmail = currentUserEmail;
+
         setBackground(SCODashboard.ADMIN_BG);
         setLayout(new BorderLayout(0, 20));
         setBorder(new EmptyBorder(25, 25, 25, 25));
@@ -55,6 +67,8 @@ public class ManageAccountsPanel extends JPanel {
 
         centerContent.add(scrollPane, BorderLayout.CENTER);
         add(centerContent, BorderLayout.CENTER);
+
+        loadAccounts();
     }
 
     private JPanel createCreateAccountPanel() {
@@ -106,14 +120,9 @@ public class ManageAccountsPanel extends JPanel {
         JPanel panel = createCardPanel("Current SCO Accounts");
         panel.setLayout(new BorderLayout());
 
-        String[] columns = {"Employee ID", "First Name", "Last Name", "Email", "Role"};
-        Object[][] sampleData = {
-                {"1001", "Jordan", "Hayes", "jhayes@csusm.edu", "SCO"},
-                {"1002", "Monica", "Ramirez", "mramirez@csusm.edu", "SCO"},
-                {"1003", "Anthony", "Brooks", "abrooks@csusm.edu", "SCO"}
-        };
+        String[] columns = {"User ID", "Employee ID", "First Name", "Last Name", "Email", "Role"};
 
-        tableModel = new DefaultTableModel(sampleData, columns) {
+        tableModel = new DefaultTableModel(columns, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
                 return false;
@@ -159,16 +168,55 @@ public class ManageAccountsPanel extends JPanel {
         return panel;
     }
 
+    private void loadAccounts() {
+        tableModel.setRowCount(0);
+
+        String sql = """
+                SELECT u.user_id,
+                       u.first_name,
+                       u.last_name,
+                       u.email,
+                       s.emp_id
+                FROM user u
+                JOIN sco s ON u.user_id = s.user_id
+                WHERE u.role = 'SCO'
+                ORDER BY u.last_name, u.first_name
+                """;
+
+        try (Connection conn = DriverManager.getConnection(DB_URL);
+             PreparedStatement pstmt = conn.prepareStatement(sql);
+             ResultSet rs = pstmt.executeQuery()) {
+
+            while (rs.next()) {
+                tableModel.addRow(new Object[]{
+                        rs.getInt("user_id"),
+                        rs.getInt("emp_id"),
+                        rs.getString("first_name"),
+                        rs.getString("last_name"),
+                        rs.getString("email"),
+                        "SCO"
+                });
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this,
+                    "Failed to load SCO accounts.",
+                    "Database Error",
+                    JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
     private void createScoAccount() {
         String firstName = firstNameField.getText().trim();
         String lastName = lastNameField.getText().trim();
         String email = emailField.getText().trim();
-        String employeeId = employeeIdField.getText().trim();
+        String employeeIdText = employeeIdField.getText().trim();
         String password = new String(passwordField.getPassword());
         String confirmPassword = new String(confirmPasswordField.getPassword());
 
         if (firstName.isEmpty() || lastName.isEmpty() || email.isEmpty()
-                || employeeId.isEmpty() || password.isEmpty() || confirmPassword.isEmpty()) {
+                || employeeIdText.isEmpty() || password.isEmpty() || confirmPassword.isEmpty()) {
             JOptionPane.showMessageDialog(this,
                     "Please complete all fields before creating an SCO account.",
                     "Missing Information",
@@ -184,6 +232,14 @@ public class ManageAccountsPanel extends JPanel {
             return;
         }
 
+        if (!employeeIdText.matches("\\d+")) {
+            JOptionPane.showMessageDialog(this,
+                    "Employee ID must be numeric.",
+                    "Invalid Employee ID",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
         if (!password.equals(confirmPassword)) {
             JOptionPane.showMessageDialog(this,
                     "Passwords do not match.",
@@ -192,38 +248,101 @@ public class ManageAccountsPanel extends JPanel {
             return;
         }
 
-        if (isDuplicateEmployeeId(employeeId)) {
+        if (password.length() < 6) {
             JOptionPane.showMessageDialog(this,
-                    "That Employee ID already exists.",
-                    "Duplicate Employee ID",
+                    "Password must be at least 6 characters.",
+                    "Weak Password",
                     JOptionPane.WARNING_MESSAGE);
             return;
         }
 
-        tableModel.addRow(new Object[]{
-                employeeId,
-                firstName,
-                lastName,
-                email,
-                "SCO"
-        });
+        int employeeId = Integer.parseInt(employeeIdText);
 
-        JOptionPane.showMessageDialog(this,
-                "SCO account created successfully.",
-                "Success",
-                JOptionPane.INFORMATION_MESSAGE);
+        String duplicateCheckSql = """
+                SELECT 1
+                FROM user u
+                LEFT JOIN sco s ON u.user_id = s.user_id
+                WHERE u.email = ? OR s.emp_id = ?
+                LIMIT 1
+                """;
 
-        clearForm();
-    }
+        String insertUserSql = """
+                INSERT INTO user (first_name, last_name, email, password_hash, role)
+                VALUES (?, ?, ?, ?, 'SCO')
+                """;
 
-    private boolean isDuplicateEmployeeId(String employeeId) {
-        for (int i = 0; i < tableModel.getRowCount(); i++) {
-            String existingId = tableModel.getValueAt(i, 0).toString();
-            if (existingId.equalsIgnoreCase(employeeId)) {
-                return true;
+        String insertScoSql = """
+                INSERT INTO sco (emp_id, user_id)
+                VALUES (?, ?)
+                """;
+
+        try (Connection conn = DriverManager.getConnection(DB_URL)) {
+            conn.setAutoCommit(false);
+
+            try {
+                try (PreparedStatement checkStmt = conn.prepareStatement(duplicateCheckSql)) {
+                    checkStmt.setString(1, email);
+                    checkStmt.setInt(2, employeeId);
+
+                    try (ResultSet rs = checkStmt.executeQuery()) {
+                        if (rs.next()) {
+                            JOptionPane.showMessageDialog(this,
+                                    "An account with that email or employee ID already exists.",
+                                    "Duplicate Account",
+                                    JOptionPane.WARNING_MESSAGE);
+                            conn.rollback();
+                            return;
+                        }
+                    }
+                }
+
+                int userId;
+
+                try (PreparedStatement userStmt = conn.prepareStatement(insertUserSql, Statement.RETURN_GENERATED_KEYS)) {
+                    userStmt.setString(1, firstName);
+                    userStmt.setString(2, lastName);
+                    userStmt.setString(3, email);
+                    userStmt.setString(4, hashPassword(password));
+                    userStmt.executeUpdate();
+
+                    try (ResultSet keys = userStmt.getGeneratedKeys()) {
+                        if (!keys.next()) {
+                            throw new Exception("Failed to retrieve generated user ID.");
+                        }
+                        userId = keys.getInt(1);
+                    }
+                }
+
+                try (PreparedStatement scoStmt = conn.prepareStatement(insertScoSql)) {
+                    scoStmt.setInt(1, employeeId);
+                    scoStmt.setInt(2, userId);
+                    scoStmt.executeUpdate();
+                }
+
+                conn.commit();
+
+                JOptionPane.showMessageDialog(this,
+                        "SCO account created successfully.",
+                        "Success",
+                        JOptionPane.INFORMATION_MESSAGE);
+
+                clearForm();
+                loadAccounts();
+
+            } catch (Exception ex) {
+                conn.rollback();
+                throw ex;
+            } finally {
+                conn.setAutoCommit(true);
             }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this,
+                    "Failed to create account.",
+                    "Database Error",
+                    JOptionPane.ERROR_MESSAGE);
         }
-        return false;
     }
 
     private void deleteSelectedSco() {
@@ -237,9 +356,20 @@ public class ManageAccountsPanel extends JPanel {
             return;
         }
 
-        String employeeId = tableModel.getValueAt(selectedRow, 0).toString();
-        String firstName = tableModel.getValueAt(selectedRow, 1).toString();
-        String lastName = tableModel.getValueAt(selectedRow, 2).toString();
+        String email = tableModel.getValueAt(selectedRow, 4).toString();
+
+        if (email.equalsIgnoreCase(currentUserEmail)) {
+            JOptionPane.showMessageDialog(this,
+                    "You cannot delete your own account.",
+                    "Action Not Allowed",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        int userId = (int) tableModel.getValueAt(selectedRow, 0);
+        String employeeId = tableModel.getValueAt(selectedRow, 1).toString();
+        String firstName = tableModel.getValueAt(selectedRow, 2).toString();
+        String lastName = tableModel.getValueAt(selectedRow, 3).toString();
 
         int confirm = JOptionPane.showConfirmDialog(this,
                 "Delete SCO account for " + firstName + " " + lastName + " (ID: " + employeeId + ")?",
@@ -247,13 +377,47 @@ public class ManageAccountsPanel extends JPanel {
                 JOptionPane.YES_NO_OPTION,
                 JOptionPane.WARNING_MESSAGE);
 
-        if (confirm == JOptionPane.YES_OPTION) {
-            tableModel.removeRow(selectedRow);
+        if (confirm != JOptionPane.YES_OPTION) {
+            return;
+        }
+
+        String sql = "DELETE FROM user WHERE user_id = ?";
+
+        try (Connection conn = DriverManager.getConnection(DB_URL);
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setInt(1, userId);
+            pstmt.executeUpdate();
 
             JOptionPane.showMessageDialog(this,
                     "SCO account deleted successfully.",
                     "Deleted",
                     JOptionPane.INFORMATION_MESSAGE);
+
+            loadAccounts();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this,
+                    "Failed to delete account.",
+                    "Database Error",
+                    JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private String hashPassword(String password) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] hash = md.digest(password.getBytes());
+
+            StringBuilder sb = new StringBuilder();
+            for (byte b : hash) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to hash password.", e);
         }
     }
 
@@ -264,6 +428,10 @@ public class ManageAccountsPanel extends JPanel {
         employeeIdField.setText("");
         passwordField.setText("");
         confirmPasswordField.setText("");
+    }
+
+    public void refresh() {
+        loadAccounts();
     }
 
     private JPanel createCardPanel(String title) {

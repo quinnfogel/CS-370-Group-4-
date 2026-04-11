@@ -18,6 +18,7 @@ public class SCODashboard extends JFrame {
     private JPanel contentPanel;
     private CertificationErrorsPanel errorsPanel;
     private SCORequestHistoryPanel historyPanel;
+    private ManageAccountsPanel manageAccountsPanel;
 
     public SCODashboard() {
         setTitle("CSUSM VetConnect - SCO Dashboard");
@@ -99,7 +100,7 @@ public class SCODashboard extends JFrame {
 
         JButton errorsButton = createSidebarButton("Certification Errors");
         errorsButton.addActionListener(e -> {
-            errorsPanel.refreshData();   // 🔥 refresh every time
+            errorsPanel.refreshData();
             cardLayout.show(contentPanel, "ERRORS");
         });
 
@@ -110,7 +111,10 @@ public class SCODashboard extends JFrame {
         });
 
         JButton manageButton = createSidebarButton("Manage Accounts");
-        manageButton.addActionListener(e -> cardLayout.show(contentPanel, "MANAGE"));
+        manageButton.addActionListener(e -> {
+            manageAccountsPanel.refresh();
+            cardLayout.show(contentPanel, "MANAGE");
+        });
 
         sidebar.add(homeButton);
         sidebar.add(Box.createRigidArea(new Dimension(0, 12)));
@@ -132,11 +136,15 @@ public class SCODashboard extends JFrame {
 
         contentPanel.add(new SCODashboardHomePanel(), "HOME");
         contentPanel.add(new SubmittedRequestsPanel(), "SUBMITTED");
+
         errorsPanel = new CertificationErrorsPanel();
         contentPanel.add(errorsPanel, "ERRORS");
+
         historyPanel = new SCORequestHistoryPanel();
         contentPanel.add(historyPanel, "HISTORY");
-        contentPanel.add(new ManageAccountsPanel(), "MANAGE");
+
+        manageAccountsPanel = new ManageAccountsPanel(Session.getEmail());
+        contentPanel.add(manageAccountsPanel, "MANAGE");
 
         cardLayout.show(contentPanel, "HOME");
         return contentPanel;
