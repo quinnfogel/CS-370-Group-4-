@@ -95,7 +95,7 @@ public class SCODashboard extends JFrame {
         JButton homeButton = createSidebarButton("Dashboard Home");
         homeButton.addActionListener(e -> cardLayout.show(contentPanel, "HOME"));
 
-        JButton submittedButton = createSidebarButton("Submitted Requests");
+        JButton submittedButton = createSidebarButton("Certification Queue");
         submittedButton.addActionListener(e -> cardLayout.show(contentPanel, "SUBMITTED"));
 
         JButton errorsButton = createSidebarButton("Certification Errors");
@@ -135,7 +135,7 @@ public class SCODashboard extends JFrame {
         contentPanel = new JPanel(cardLayout);
 
         contentPanel.add(new SCODashboardHomePanel(), "HOME");
-        contentPanel.add(new SubmittedRequestsPanel(), "SUBMITTED");
+        contentPanel.add(new SCOCertificationQueue(), "SUBMITTED");
 
         errorsPanel = new CertificationErrorsPanel();
         contentPanel.add(errorsPanel, "ERRORS");

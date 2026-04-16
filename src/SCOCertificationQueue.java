@@ -13,7 +13,7 @@ import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.List;
 
-public class SubmittedRequestsPanel extends JPanel {
+public class SCOCertificationQueue extends JPanel {
 
     private static final String DB_URL = "jdbc:sqlite:database.sqlite";
 
@@ -38,12 +38,12 @@ public class SubmittedRequestsPanel extends JPanel {
 
     private final List<Integer> requestCertIds = new ArrayList<>();
 
-    public SubmittedRequestsPanel() {
+    public SCOCertificationQueue() {
         setBackground(SCODashboard.ADMIN_BG);
         setLayout(new BorderLayout(0, 20));
         setBorder(new EmptyBorder(25, 25, 25, 25));
 
-        JLabel pageTitle = new JLabel("Submitted Requests");
+        JLabel pageTitle = new JLabel("Certification Requests Queue");
         pageTitle.setFont(new Font("Segoe UI", Font.BOLD, 28));
         pageTitle.setForeground(SCODashboard.DARK_TEXT);
 
@@ -85,7 +85,7 @@ public class SubmittedRequestsPanel extends JPanel {
     }
 
     private JPanel createRequestsTablePanel() {
-        JPanel panel = createCardPanel("Submitted Certification Queue");
+        JPanel panel = createCardPanel("Submitted & In Review Requests");
         panel.setLayout(new BorderLayout());
 
         String[] columns = {"Request ID", "Student Name", "Term", "Benefit Type", "Status", "Date Submitted"};
@@ -278,7 +278,7 @@ public class SubmittedRequestsPanel extends JPanel {
                 JOIN student s ON cr.student_id = s.student_id
                 JOIN user u ON s.user_id = u.user_id
                 WHERE cr.is_draft = 0
-                  AND cr.status = 'Submitted'
+                  AND cr.status IN ('Submitted', 'In Review')
                 ORDER BY COALESCE(cr.submission_date, cr.last_updated_date) DESC, cr.cert_id DESC
                 """;
 
