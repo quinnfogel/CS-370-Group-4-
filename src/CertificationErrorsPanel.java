@@ -111,6 +111,7 @@ public class CertificationErrorsPanel extends JPanel {
         errorsTable.setGridColor(SCODashboard.BORDER);
         errorsTable.setFillsViewportHeight(true);
         errorsTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        errorsTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
 
         errorsTable.getSelectionModel().addListSelectionListener(new ListSelectionListener() {
             @Override
@@ -126,7 +127,9 @@ public class CertificationErrorsPanel extends JPanel {
 
         JScrollPane scrollPane = new JScrollPane(errorsTable);
         scrollPane.setBorder(new LineBorder(SCODashboard.BORDER, 1, true));
-        scrollPane.setPreferredSize(new Dimension(900, 180));
+        scrollPane.setPreferredSize(new Dimension(1100, 180));
+        scrollPane.getViewport().setBackground(Color.WHITE);
+        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
 
         JPanel content = new JPanel(new BorderLayout());
         content.setOpaque(false);
@@ -188,7 +191,16 @@ public class CertificationErrorsPanel extends JPanel {
         JPanel panel = createCardPanel("Submitted Courses");
         panel.setLayout(new BorderLayout());
 
-        String[] columns = {"Prefix", "Course Number", "Class Number", "Units", "Weeks"};
+        String[] columns = {
+                "Section Number",
+                "Course Prefix",
+                "Course Number",
+                "Title / Course Name",
+                "CRN",
+                "Units",
+                "Course Length (Weeks)"
+        };
+
         coursesTableModel = new DefaultTableModel(columns, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
@@ -205,10 +217,13 @@ public class CertificationErrorsPanel extends JPanel {
         coursesTable.setSelectionBackground(new Color(214, 232, 220));
         coursesTable.setGridColor(SCODashboard.BORDER);
         coursesTable.setFillsViewportHeight(true);
+        coursesTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
 
         JScrollPane scrollPane = new JScrollPane(coursesTable);
         scrollPane.setBorder(new LineBorder(SCODashboard.BORDER, 1, true));
-        scrollPane.setPreferredSize(new Dimension(900, 180));
+        scrollPane.setPreferredSize(new Dimension(1100, 180));
+        scrollPane.getViewport().setBackground(Color.WHITE);
+        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
 
         JPanel content = new JPanel(new BorderLayout());
         content.setOpaque(false);
@@ -287,6 +302,7 @@ public class CertificationErrorsPanel extends JPanel {
             JOIN student s ON cr.student_id = s.student_id
             JOIN user u ON s.user_id = u.user_id
             WHERE ce.is_resolved = 0
+              AND cr.status IN ('Action Needed', 'Error')
             ORDER BY ce.error_id DESC
             """;
 
@@ -400,8 +416,14 @@ public class CertificationErrorsPanel extends JPanel {
         coursesTableModel.setRowCount(0);
 
         String courseSql = """
-                SELECT course_prefix, course_number, COALESCE(crn, section_number) AS class_number,
-                       units, course_length_weeks
+                SELECT
+                    section_number,
+                    course_prefix,
+                    course_number,
+                    title,
+                    crn,
+                    units,
+                    course_length_weeks
                 FROM course
                 WHERE cert_id = ?
                 ORDER BY course_prefix, course_number
@@ -413,9 +435,11 @@ public class CertificationErrorsPanel extends JPanel {
             try (ResultSet rs = pstmt.executeQuery()) {
                 while (rs.next()) {
                     coursesTableModel.addRow(new Object[]{
+                            rs.getString("section_number"),
                             rs.getString("course_prefix"),
                             String.valueOf(rs.getInt("course_number")),
-                            rs.getString("class_number"),
+                            rs.getString("title"),
+                            rs.getString("crn"),
                             formatUnits(rs.getDouble("units")),
                             String.valueOf(rs.getInt("course_length_weeks"))
                     });
@@ -690,33 +714,22 @@ public class CertificationErrorsPanel extends JPanel {
         String year = value.substring(0, 4);
         String month = value.substring(4);
 
-        switch (month) {
-            case "01":
-                return "Winter " + year;
-            case "03":
-                return "Spring " + year;
-            case "05":
-                return "Summer " + year;
-            case "08":
-                return "Fall " + year;
-            default:
-                return year + " Term " + month;
-        }
+        return switch (month) {
+            case "01" -> "Spring " + year;
+            case "05" -> "Summer " + year;
+            case "08" -> "Fall " + year;
+            default -> year + " Term " + month;
+        };
     }
 
     private String formatTrainingTime(String unitLoadCategory) {
-        switch (unitLoadCategory) {
-            case "FullTime":
-                return "Full-Time";
-            case "ThreeQuarterTime":
-                return "3/4-Time";
-            case "HalfTime":
-                return "Half-Time";
-            case "LessThanHalfTime":
-                return "Less Than Half-Time";
-            default:
-                return unitLoadCategory;
-        }
+        return switch (unitLoadCategory) {
+            case "FullTime" -> "Full-Time";
+            case "ThreeQuarterTime" -> "3/4-Time";
+            case "HalfTime" -> "Half-Time";
+            case "LessThanHalfTime" -> "Less Than Half-Time";
+            default -> unitLoadCategory;
+        };
     }
 
     private String formatUnits(double units) {

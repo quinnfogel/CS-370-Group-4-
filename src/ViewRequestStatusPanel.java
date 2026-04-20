@@ -414,10 +414,6 @@ public class ViewRequestStatusPanel extends JPanel {
         RequestListItem selected = requestList.getSelectedValue();
 
         if (selected == null) {
-            JOptionPane.showMessageDialog(this,
-                    "Please select a certification request first.",
-                    "No Request Selected",
-                    JOptionPane.WARNING_MESSAGE);
             return;
         }
 
@@ -489,10 +485,6 @@ public class ViewRequestStatusPanel extends JPanel {
             }
 
             if (items.isEmpty()) {
-                JOptionPane.showMessageDialog(this,
-                        "No certification requests were found.",
-                        "No Requests",
-                        JOptionPane.INFORMATION_MESSAGE);
                 return;
             }
 

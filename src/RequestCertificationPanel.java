@@ -179,19 +179,23 @@ public class RequestCertificationPanel extends JPanel {
         coursesTable.setSelectionBackground(new Color(220, 240, 245));
         coursesTable.setGridColor(StudentDashboard.BORDER);
         coursesTable.setFillsViewportHeight(true);
-        coursesTable.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
 
-        coursesTable.getColumnModel().getColumn(0).setPreferredWidth(110);
-        coursesTable.getColumnModel().getColumn(1).setPreferredWidth(110);
-        coursesTable.getColumnModel().getColumn(2).setPreferredWidth(110);
-        coursesTable.getColumnModel().getColumn(3).setPreferredWidth(240);
-        coursesTable.getColumnModel().getColumn(4).setPreferredWidth(100);
-        coursesTable.getColumnModel().getColumn(5).setPreferredWidth(80);
-        coursesTable.getColumnModel().getColumn(6).setPreferredWidth(150);
+        // Make table expand to available width
+        coursesTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
+
+        coursesTable.getColumnModel().getColumn(0).setPreferredWidth(120);
+        coursesTable.getColumnModel().getColumn(1).setPreferredWidth(120);
+        coursesTable.getColumnModel().getColumn(2).setPreferredWidth(120);
+        coursesTable.getColumnModel().getColumn(3).setPreferredWidth(420);
+        coursesTable.getColumnModel().getColumn(4).setPreferredWidth(110);
+        coursesTable.getColumnModel().getColumn(5).setPreferredWidth(90);
+        coursesTable.getColumnModel().getColumn(6).setPreferredWidth(180);
 
         JScrollPane scrollPane = new JScrollPane(coursesTable);
         scrollPane.setBorder(new LineBorder(StudentDashboard.BORDER, 1, true));
-        scrollPane.setPreferredSize(new Dimension(980, 180));
+        scrollPane.setPreferredSize(new Dimension(1100, 180));
+        scrollPane.getViewport().setBackground(Color.WHITE);
+        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
 
         JPanel content = new JPanel(new BorderLayout());
         content.setOpaque(false);
@@ -595,10 +599,13 @@ public class RequestCertificationPanel extends JPanel {
                 try (ResultSet rs = insertRequestPs.getGeneratedKeys()) {
                     if (rs.next()) {
                         certId = rs.getInt(1);
+
                     } else {
                         throw new SQLException("Failed to retrieve generated cert_id.");
                     }
                 }
+
+                upsertMonthlyAllowance(conn, certId, selectedBenefitType, unitLoadCategory);
 
                 for (int i = 0; i < tableModel.getRowCount(); i++) {
                     String sectionNumber = tableModel.getValueAt(i, 0).toString();
@@ -670,5 +677,48 @@ public class RequestCertificationPanel extends JPanel {
         totalUnitsValue.setText("0");
         trainingTimeValue.setText("N/A");
         allowanceValue.setText("$0 / month");
+    }
+
+    private void upsertMonthlyAllowance(Connection conn, int certId, String benefitType, String unitLoadCategory) throws SQLException {
+        double amount = calculateAllowanceAmount(benefitType, unitLoadCategory);
+
+        String sql = """
+            INSERT INTO monthly_allowance_calculator (
+                cert_id,
+                estimated_monthly_allowance,
+                calculated_date
+            ) VALUES (?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(cert_id) DO UPDATE SET
+                estimated_monthly_allowance = excluded.estimated_monthly_allowance,
+                calculated_date = CURRENT_TIMESTAMP
+            """;
+
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setInt(1, certId);
+            pstmt.setDouble(2, amount);
+            pstmt.executeUpdate();
+        }
+    }
+
+    private double calculateAllowanceAmount(String benefitType, String unitLoadCategory) {
+        if (benefitType == null || unitLoadCategory == null) {
+            return 0.0;
+        }
+
+        return switch (benefitType) {
+            case "CH31", "CH33", "CH33D" -> switch (unitLoadCategory) {
+                case "FullTime" -> 3987.0;
+                case "ThreeQuarterTime" -> 3190.0;
+                case "HalfTime" -> 2392.0;
+                default -> 0.0;
+            };
+            case "CH35" -> switch (unitLoadCategory) {
+                case "FullTime" -> 1536.0;
+                case "ThreeQuarterTime" -> 1214.0;
+                case "HalfTime" -> 890.0;
+                default -> 0.0;
+            };
+            default -> 0.0;
+        };
     }
 }

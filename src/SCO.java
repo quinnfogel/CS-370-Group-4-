@@ -7,11 +7,10 @@ public class SCO extends User {
                String lastName,
                String email,
                String passwordHash,
-               boolean isActive,
                java.time.LocalDateTime lastLogin,
                int empId) {
 
-        super(userId, firstName, lastName, email, passwordHash, UserRole.SCO, isActive, lastLogin);
+        super(userId, firstName, lastName, email, passwordHash, UserRole.SCO, lastLogin);
 
         this.empId = empId;
     }
@@ -58,7 +57,6 @@ public class SCO extends User {
                 ", empId=" + empId +
                 ", fullName='" + getFullName() + '\'' +
                 ", email='" + getEmail() + '\'' +
-                ", isActive=" + isActive() +
                 '}';
     }
 }

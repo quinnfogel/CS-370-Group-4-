@@ -38,7 +38,7 @@ public class CertRequest {
         this.certId = certId;
         this.academicTermCode = academicTermCode;
         this.benefitType = benefitType;
-        this.status = null;
+        this.status = RequestStatus.DRAFT;
         this.submissionDate = null;
         this.lastUpdatedDate = LocalDateTime.now();
         this.totalUnits = 0.0;
@@ -273,6 +273,12 @@ public class CertRequest {
 
     public void cancel() {
         this.cancelRequested = true;
+        this.status = RequestStatus.CANCELLATION_PENDING;
+        touch();
+    }
+
+    public void markCancelled() {
+        this.cancelRequested = false;
         this.status = RequestStatus.CANCELLED;
         touch();
     }

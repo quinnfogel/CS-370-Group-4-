@@ -211,19 +211,23 @@ public class RequestHistoryPanel extends JPanel {
         coursesTable.setSelectionBackground(new Color(220, 240, 245));
         coursesTable.setGridColor(StudentDashboard.BORDER);
         coursesTable.setFillsViewportHeight(true);
-        coursesTable.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
 
-        coursesTable.getColumnModel().getColumn(0).setPreferredWidth(110);
-        coursesTable.getColumnModel().getColumn(1).setPreferredWidth(110);
-        coursesTable.getColumnModel().getColumn(2).setPreferredWidth(110);
-        coursesTable.getColumnModel().getColumn(3).setPreferredWidth(240);
-        coursesTable.getColumnModel().getColumn(4).setPreferredWidth(100);
-        coursesTable.getColumnModel().getColumn(5).setPreferredWidth(80);
-        coursesTable.getColumnModel().getColumn(6).setPreferredWidth(150);
+        // Make the table stretch to fit the available width
+        coursesTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
+
+        coursesTable.getColumnModel().getColumn(0).setPreferredWidth(120); // Section Number
+        coursesTable.getColumnModel().getColumn(1).setPreferredWidth(120); // Course Prefix
+        coursesTable.getColumnModel().getColumn(2).setPreferredWidth(120); // Course Number
+        coursesTable.getColumnModel().getColumn(3).setPreferredWidth(420); // Title / Course Name
+        coursesTable.getColumnModel().getColumn(4).setPreferredWidth(110); // CRN
+        coursesTable.getColumnModel().getColumn(5).setPreferredWidth(90);  // Units
+        coursesTable.getColumnModel().getColumn(6).setPreferredWidth(180); // Course Length
 
         JScrollPane scrollPane = new JScrollPane(coursesTable);
         scrollPane.setBorder(new LineBorder(StudentDashboard.BORDER, 1, true));
-        scrollPane.setPreferredSize(new Dimension(980, 180));
+        scrollPane.setPreferredSize(new Dimension(1100, 180));
+        scrollPane.getViewport().setBackground(Color.WHITE);
+        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
 
         JPanel content = new JPanel(new BorderLayout());
         content.setOpaque(false);

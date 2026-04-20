@@ -266,22 +266,25 @@ public class SCORequestHistoryPanel extends JPanel {
         coursesTable.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 14));
         coursesTable.getTableHeader().setBackground(new Color(226, 235, 229));
         coursesTable.getTableHeader().setForeground(SCODashboard.DARK_TEXT);
+        coursesTable.getTableHeader().setReorderingAllowed(false);
         coursesTable.setSelectionBackground(new Color(214, 232, 220));
         coursesTable.setGridColor(SCODashboard.BORDER);
         coursesTable.setFillsViewportHeight(true);
-        coursesTable.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+        coursesTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
 
-        coursesTable.getColumnModel().getColumn(0).setPreferredWidth(110);
-        coursesTable.getColumnModel().getColumn(1).setPreferredWidth(110);
-        coursesTable.getColumnModel().getColumn(2).setPreferredWidth(110);
-        coursesTable.getColumnModel().getColumn(3).setPreferredWidth(240);
-        coursesTable.getColumnModel().getColumn(4).setPreferredWidth(100);
-        coursesTable.getColumnModel().getColumn(5).setPreferredWidth(80);
-        coursesTable.getColumnModel().getColumn(6).setPreferredWidth(150);
+        coursesTable.getColumnModel().getColumn(0).setPreferredWidth(120);
+        coursesTable.getColumnModel().getColumn(1).setPreferredWidth(120);
+        coursesTable.getColumnModel().getColumn(2).setPreferredWidth(120);
+        coursesTable.getColumnModel().getColumn(3).setPreferredWidth(420);
+        coursesTable.getColumnModel().getColumn(4).setPreferredWidth(110);
+        coursesTable.getColumnModel().getColumn(5).setPreferredWidth(90);
+        coursesTable.getColumnModel().getColumn(6).setPreferredWidth(180);
 
         JScrollPane scrollPane = new JScrollPane(coursesTable);
         scrollPane.setBorder(new LineBorder(SCODashboard.BORDER, 1, true));
-        scrollPane.setPreferredSize(new Dimension(980, 190));
+        scrollPane.setPreferredSize(new Dimension(1100, 190));
+        scrollPane.getViewport().setBackground(Color.WHITE);
+        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
 
         JPanel content = new JPanel(new BorderLayout());
         content.setOpaque(false);

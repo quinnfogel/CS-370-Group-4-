@@ -207,10 +207,6 @@ public class ModifyCertificationPanel extends JPanel {
         CertificationListItem selected = requestList.getSelectedValue();
 
         if (selected == null) {
-            JOptionPane.showMessageDialog(this,
-                    "Please select a certification request first.",
-                    "No Request Selected",
-                    JOptionPane.WARNING_MESSAGE);
             return;
         }
 
@@ -258,6 +254,20 @@ public class ModifyCertificationPanel extends JPanel {
         centerContent.add(scrollPane, BorderLayout.CENTER);
 
         return centerContent;
+    }
+
+    private void resolveErrorsForRequest(Connection conn, int certId) throws Exception {
+        String sql = """
+            UPDATE cert_error
+            SET is_resolved = 1
+            WHERE cert_id = ?
+              AND is_resolved = 0
+            """;
+
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setInt(1, certId);
+            pstmt.executeUpdate();
+        }
     }
 
     private void goBackToRequestList() {
@@ -705,11 +715,6 @@ public class ModifyCertificationPanel extends JPanel {
             }
 
             if (items.isEmpty()) {
-                JOptionPane.showMessageDialog(this,
-                        "No certification requests in Submitted, In Review, or Error status were found.",
-                        "No Eligible Requests",
-                        JOptionPane.INFORMATION_MESSAGE);
-                updateSummary();
                 return;
             }
 
@@ -1106,29 +1111,29 @@ public class ModifyCertificationPanel extends JPanel {
 
         String deleteCoursesSql = "DELETE FROM course WHERE cert_id = ?";
         String insertCourseSql = """
-                INSERT INTO course (
-                    cert_id,
-                    section_number,
-                    course_prefix,
-                    course_number,
-                    title,
-                    crn,
-                    units,
-                    course_length_weeks
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """;
+            INSERT INTO course (
+                cert_id,
+                section_number,
+                course_prefix,
+                course_number,
+                title,
+                crn,
+                units,
+                course_length_weeks
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """;
 
         String updateRequestSql = """
-                UPDATE cert_request
-                SET status = 'Submitted',
-                    submission_date = CURRENT_TIMESTAMP,
-                    last_updated_date = CURRENT_TIMESTAMP,
-                    total_units = ?,
-                    unit_load_category = ?,
-                    is_draft = 0,
-                    cancel_requested = 0
-                WHERE cert_id = ?
-                """;
+            UPDATE cert_request
+            SET status = 'Submitted',
+                submission_date = CURRENT_TIMESTAMP,
+                last_updated_date = CURRENT_TIMESTAMP,
+                total_units = ?,
+                unit_load_category = ?,
+                is_draft = 0,
+                cancel_requested = 0
+            WHERE cert_id = ?
+            """;
 
         try (Connection conn = DriverManager.getConnection(DB_URL)) {
             conn.setAutoCommit(false);
@@ -1169,6 +1174,9 @@ public class ModifyCertificationPanel extends JPanel {
                     updateStmt.executeUpdate();
                 }
 
+                resolveErrorsForRequest(conn, currentCertId);
+                upsertMonthlyAllowance(conn, currentCertId, benefitTypeValueLabel.getText(), unitLoadCategory);
+
                 conn.commit();
 
             } catch (Exception ex) {
@@ -1178,8 +1186,10 @@ public class ModifyCertificationPanel extends JPanel {
                 conn.setAutoCommit(true);
             }
 
+            cancelRequested = false;
             statusValue.setText("Submitted");
             applyStatusColor("Submitted");
+            scoErrorMessageArea.setText("No current SCO error message.");
             hasUnsavedChanges = false;
             updateSummary();
 
@@ -1340,6 +1350,49 @@ public class ModifyCertificationPanel extends JPanel {
             return String.valueOf((long) value);
         }
         return String.valueOf(value);
+    }
+
+    private void upsertMonthlyAllowance(Connection conn, int certId, String benefitType, String unitLoadCategory) throws Exception {
+        double amount = calculateAllowanceAmount(benefitType, unitLoadCategory);
+
+        String sql = """
+            INSERT INTO monthly_allowance_calculator (
+                cert_id,
+                estimated_monthly_allowance,
+                calculated_date
+            ) VALUES (?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(cert_id) DO UPDATE SET
+                estimated_monthly_allowance = excluded.estimated_monthly_allowance,
+                calculated_date = CURRENT_TIMESTAMP
+            """;
+
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setInt(1, certId);
+            pstmt.setDouble(2, amount);
+            pstmt.executeUpdate();
+        }
+    }
+
+    private double calculateAllowanceAmount(String benefitType, String unitLoadCategory) {
+        if (benefitType == null || unitLoadCategory == null) {
+            return 0.0;
+        }
+
+        return switch (benefitType) {
+            case "CH31", "CH33", "CH33D" -> switch (unitLoadCategory) {
+                case "FullTime" -> 3987.0;
+                case "ThreeQuarterTime" -> 3190.0;
+                case "HalfTime" -> 2392.0;
+                default -> 0.0;
+            };
+            case "CH35" -> switch (unitLoadCategory) {
+                case "FullTime" -> 1536.0;
+                case "ThreeQuarterTime" -> 1214.0;
+                case "HalfTime" -> 890.0;
+                default -> 0.0;
+            };
+            default -> 0.0;
+        };
     }
 
     private static class CertificationListItem {

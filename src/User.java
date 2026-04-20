@@ -8,18 +8,16 @@ public class User {
     private String email;
     private String passwordHash;
     private UserRole role;
-    private boolean isActive;
     private LocalDateTime lastLogin;
 
     public User(int userId, String firstName, String lastName, String email,
-                String passwordHash, UserRole role, boolean isActive, LocalDateTime lastLogin) {
+                String passwordHash, UserRole role, LocalDateTime lastLogin) {
         this.userId = userId;
         this.firstName = firstName;
         this.lastName = lastName;
         this.email = email;
         this.passwordHash = passwordHash;
         this.role = role;
-        this.isActive = isActive;
         this.lastLogin = lastLogin;
     }
 
@@ -78,23 +76,12 @@ public class User {
     public UserRole getRole() {
         return role;
     }
+
     protected void setRole(UserRole role) {
         if (role == null) {
             throw new IllegalArgumentException("Role cannot be null.");
         }
         this.role = role;
-    }
-
-    public boolean isActive() {
-        return isActive;
-    }
-
-    public void activateAccount() {
-        this.isActive = true;
-    }
-
-    public void deactivateAccount() {
-        this.isActive = false;
     }
 
     public LocalDateTime getLastLogin() {
@@ -116,7 +103,6 @@ public class User {
                 ", fullName='" + getFullName() + '\'' +
                 ", email='" + email + '\'' +
                 ", role='" + role + '\'' +
-                ", isActive=" + isActive +
                 ", lastLogin=" + lastLogin +
                 '}';
     }

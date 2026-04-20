@@ -8,12 +8,11 @@ public class Student extends User {
                    String lastName,
                    String email,
                    String passwordHash,
-                   boolean isActive,
                    java.time.LocalDateTime lastLogin,
                    int studentId,
                    BenefitType benefitType) {
 
-        super(userId, firstName, lastName, email, passwordHash, UserRole.STUDENT, isActive, lastLogin);
+        super(userId, firstName, lastName, email, passwordHash, UserRole.STUDENT, lastLogin);
 
         this.studentId = studentId;
         this.benefitType = benefitType;
@@ -53,7 +52,6 @@ public class Student extends User {
                 ", fullName='" + getFullName() + '\'' +
                 ", email='" + getEmail() + '\'' +
                 ", benefitType=" + benefitType +
-                ", isActive=" + isActive() +
                 '}';
     }
 }

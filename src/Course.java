@@ -3,12 +3,12 @@ public class Course {
     private String coursePrefix;
     private int courseNumber;
     private String title;
-    private int crn;
+    private String crn;
     private double units;
     private int courseLengthWeeks;
 
     public Course(String sectionNumber, String coursePrefix, int courseNumber,
-                  String title, int crn, double units, int courseLengthWeeks) {
+                  String title, String crn, double units, int courseLengthWeeks) {
         this.sectionNumber = sectionNumber;
         this.coursePrefix = coursePrefix;
         this.courseNumber = courseNumber;
@@ -50,11 +50,11 @@ public class Course {
         this.title = title;
     }
 
-    public int getCrn() {
+    public String getCrn() {
         return crn;
     }
 
-    public void setCrn(int crn) {
+    public void setCrn(String crn) {
         this.crn = crn;
     }
 
@@ -89,7 +89,7 @@ public class Course {
                 ", coursePrefix='" + coursePrefix + '\'' +
                 ", courseNumber=" + courseNumber +
                 ", title='" + title + '\'' +
-                ", crn=" + crn +
+                ", crn='" + crn + '\'' +
                 ", units=" + units +
                 ", courseLengthWeeks=" + courseLengthWeeks +
                 '}';
