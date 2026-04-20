@@ -5,10 +5,12 @@ import javax.swing.border.LineBorder;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.sql.Connection;
+import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.DriverManager;
+import java.util.ArrayList;
+import java.util.List;
 
 public class ViewRequestStatusPanel extends JPanel {
     private static final String DB_URL = "jdbc:sqlite:database.sqlite";
@@ -32,6 +34,16 @@ public class ViewRequestStatusPanel extends JPanel {
 
     private DefaultTableModel coursesTableModel;
 
+    private DefaultListModel<RequestListItem> requestListModel;
+    private JList<RequestListItem> requestList;
+    private CardLayout cardLayout;
+    private JPanel cardPanel;
+
+    private int currentStudentId = 0;
+
+    private static final String LIST_CARD = "LIST";
+    private static final String DETAIL_CARD = "DETAIL";
+
     public ViewRequestStatusPanel() {
         setBackground(StudentDashboard.LIGHT_BG);
         setLayout(new BorderLayout(0, 20));
@@ -44,12 +56,126 @@ public class ViewRequestStatusPanel extends JPanel {
         JPanel topWrapper = new JPanel(new BorderLayout());
         topWrapper.setOpaque(false);
         topWrapper.add(pageTitle, BorderLayout.WEST);
-
         add(topWrapper, BorderLayout.NORTH);
 
+        cardLayout = new CardLayout();
+        cardPanel = new JPanel(cardLayout);
+        cardPanel.setOpaque(false);
+
+        cardPanel.add(createRequestListScreen(), LIST_CARD);
+        cardPanel.add(createDetailScreen(), DETAIL_CARD);
+
+        add(cardPanel, BorderLayout.CENTER);
+
+        refreshData();
+    }
+
+    public void refreshData() {
+        loadRequestList();
+        showListScreen();
+    }
+
+    private void showListScreen() {
+        cardLayout.show(cardPanel, LIST_CARD);
+    }
+
+    private void showDetailScreen() {
+        cardLayout.show(cardPanel, DETAIL_CARD);
+    }
+
+    private JPanel createRequestListScreen() {
+        JPanel wrapper = new JPanel(new BorderLayout());
+        wrapper.setOpaque(false);
+
+        JPanel panel = createCardPanel("Your Certification Requests");
+        panel.setLayout(new BorderLayout());
+        panel.setBorder(new CompoundBorder(
+                new LineBorder(StudentDashboard.BORDER, 1, true),
+                new EmptyBorder(24, 24, 24, 24)
+        ));
+
+        JLabel helperLabel = new JLabel("Select a certification request, then click View Status.");
+        helperLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        helperLabel.setForeground(Color.GRAY);
+
+        requestListModel = new DefaultListModel<>();
+        requestList = new JList<>(requestListModel);
+        requestList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        requestList.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        requestList.setFixedCellHeight(58);
+        requestList.setBackground(Color.WHITE);
+        requestList.setBorder(new EmptyBorder(6, 6, 6, 6));
+
+        requestList.setCellRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(
+                    JList<?> list,
+                    Object value,
+                    int index,
+                    boolean isSelected,
+                    boolean cellHasFocus
+            ) {
+                JLabel label = (JLabel) super.getListCellRendererComponent(
+                        list, value, index, isSelected, cellHasFocus
+                );
+
+                if (value instanceof RequestListItem item) {
+                    label.setText("<html><b>" + item.requestLabel + "</b><br/>"
+                            + item.termLabel + " - " + item.status + "</html>");
+                    label.setBorder(new EmptyBorder(10, 12, 10, 12));
+                }
+
+                return label;
+            }
+        });
+
+        requestList.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent e) {
+                if (e.getClickCount() == 2) {
+                    openSelectedRequest();
+                }
+            }
+        });
+
+        JScrollPane scrollPane = new JScrollPane(requestList);
+        scrollPane.setBorder(new LineBorder(StudentDashboard.BORDER, 1, true));
+        scrollPane.setPreferredSize(new Dimension(1000, 330));
+
+        JButton viewButton = createActionButton("View Status");
+        viewButton.setPreferredSize(new Dimension(140, 42));
+        viewButton.addActionListener(e -> openSelectedRequest());
+
+        JPanel contentPanel = new JPanel(new BorderLayout(0, 16));
+        contentPanel.setOpaque(false);
+        contentPanel.setBorder(new EmptyBorder(20, 0, 0, 0));
+        contentPanel.add(helperLabel, BorderLayout.NORTH);
+        contentPanel.add(scrollPane, BorderLayout.CENTER);
+
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        buttonPanel.setOpaque(false);
+        buttonPanel.setBorder(new EmptyBorder(12, 0, 0, 0));
+        buttonPanel.add(viewButton);
+
+        contentPanel.add(buttonPanel, BorderLayout.SOUTH);
+        panel.add(contentPanel, BorderLayout.CENTER);
+        wrapper.add(panel, BorderLayout.NORTH);
+
+        return wrapper;
+    }
+
+    private JComponent createDetailScreen() {
         JPanel centerContent = new JPanel();
         centerContent.setOpaque(false);
         centerContent.setLayout(new BoxLayout(centerContent, BoxLayout.Y_AXIS));
+
+        JButton backButton = createNeutralButton("Back to Request List");
+        backButton.addActionListener(e -> showListScreen());
+
+        JPanel topBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        topBar.setOpaque(false);
+        topBar.add(backButton);
+        topBar.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         JPanel overviewPanel = createCertificationOverview();
         JPanel messagePanel = createScoMessagePanel();
@@ -59,6 +185,8 @@ public class ViewRequestStatusPanel extends JPanel {
         messagePanel.setAlignmentX(Component.LEFT_ALIGNMENT);
         coursesPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
+        centerContent.add(topBar);
+        centerContent.add(Box.createRigidArea(new Dimension(0, 20)));
         centerContent.add(overviewPanel);
         centerContent.add(Box.createRigidArea(new Dimension(0, 20)));
         centerContent.add(messagePanel);
@@ -75,13 +203,7 @@ public class ViewRequestStatusPanel extends JPanel {
         scrollPane.getViewport().setBackground(StudentDashboard.LIGHT_BG);
         scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
 
-        add(scrollPane, BorderLayout.CENTER);
-
-        loadRequestData();
-    }
-
-    public void refreshData() {
-        loadRequestData();
+        return scrollPane;
     }
 
     private JPanel createCertificationOverview() {
@@ -93,7 +215,7 @@ public class ViewRequestStatusPanel extends JPanel {
         ));
         overviewPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 320));
 
-        JLabel sectionTitle = new JLabel("Current Certification Overview");
+        JLabel sectionTitle = new JLabel("Certification Request Overview");
         sectionTitle.setFont(new Font("Segoe UI", Font.BOLD, 22));
         sectionTitle.setForeground(StudentDashboard.DARK_TEXT);
 
@@ -112,31 +234,23 @@ public class ViewRequestStatusPanel extends JPanel {
 
         infoPanel.add(createInfoLabel("Request ID:"));
         infoPanel.add(requestIdValue);
-
         infoPanel.add(createInfoLabel("Term:"));
         infoPanel.add(termValue);
-
         infoPanel.add(createInfoLabel("Total Classes:"));
         infoPanel.add(totalClassesValue);
-
         infoPanel.add(createInfoLabel("Total Units:"));
         infoPanel.add(totalUnitsValue);
-
         infoPanel.add(createInfoLabel("Benefit Type:"));
         infoPanel.add(benefitTypeValue);
-
         infoPanel.add(createInfoLabel("Status:"));
         infoPanel.add(statusValueLabel);
-
         infoPanel.add(createInfoLabel("Estimated Allowance:"));
         infoPanel.add(estimatedAllowanceValue);
-
         infoPanel.add(createInfoLabel("Training Time:"));
         infoPanel.add(trainingTimeValue);
 
         overviewPanel.add(sectionTitle, BorderLayout.NORTH);
         overviewPanel.add(infoPanel, BorderLayout.CENTER);
-
         return overviewPanel;
     }
 
@@ -173,7 +287,6 @@ public class ViewRequestStatusPanel extends JPanel {
 
         panel.add(title, BorderLayout.NORTH);
         panel.add(content, BorderLayout.CENTER);
-
         return panel;
     }
 
@@ -216,19 +329,22 @@ public class ViewRequestStatusPanel extends JPanel {
         coursesTable.setSelectionBackground(new Color(220, 240, 245));
         coursesTable.setGridColor(StudentDashboard.BORDER);
         coursesTable.setFillsViewportHeight(true);
-        coursesTable.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+
+        // Match ModifyCertificationPanel formatting
+        coursesTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
 
         coursesTable.getColumnModel().getColumn(0).setPreferredWidth(110);
         coursesTable.getColumnModel().getColumn(1).setPreferredWidth(110);
         coursesTable.getColumnModel().getColumn(2).setPreferredWidth(110);
-        coursesTable.getColumnModel().getColumn(3).setPreferredWidth(240);
+        coursesTable.getColumnModel().getColumn(3).setPreferredWidth(320);
         coursesTable.getColumnModel().getColumn(4).setPreferredWidth(100);
         coursesTable.getColumnModel().getColumn(5).setPreferredWidth(80);
-        coursesTable.getColumnModel().getColumn(6).setPreferredWidth(150);
+        coursesTable.getColumnModel().getColumn(6).setPreferredWidth(170);
 
         JScrollPane scrollPane = new JScrollPane(coursesTable);
         scrollPane.setBorder(new LineBorder(StudentDashboard.BORDER, 1, true));
-        scrollPane.setPreferredSize(new Dimension(980, 200));
+        scrollPane.setPreferredSize(new Dimension(980, 180));
+        scrollPane.getViewport().setBackground(Color.WHITE);
 
         JPanel content = new JPanel(new BorderLayout());
         content.setOpaque(false);
@@ -237,43 +353,196 @@ public class ViewRequestStatusPanel extends JPanel {
 
         tablePanel.add(sectionTitle, BorderLayout.NORTH);
         tablePanel.add(content, BorderLayout.CENTER);
-
         return tablePanel;
     }
 
-    private void loadRequestData() {
-        if (!Session.isLoggedIn()) {
-            showNoDataState("No logged-in user.");
+    private JPanel createCardPanel(String title) {
+        JPanel panel = new JPanel();
+        panel.setBackground(StudentDashboard.CARD_BG);
+        panel.setBorder(new CompoundBorder(
+                new LineBorder(StudentDashboard.BORDER, 1, true),
+                new EmptyBorder(20, 20, 20, 20)
+        ));
+        panel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
+
+        JLabel titleLabel = new JLabel(title);
+        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 22));
+        titleLabel.setForeground(StudentDashboard.DARK_TEXT);
+
+        panel.setLayout(new BorderLayout());
+        panel.add(titleLabel, BorderLayout.NORTH);
+
+        return panel;
+    }
+
+    private JButton createActionButton(String text) {
+        JButton button = new JButton(text);
+        button.setFocusPainted(false);
+        button.setBackground(StudentDashboard.TEAL);
+        button.setForeground(Color.WHITE);
+        button.setFont(new Font("Segoe UI", Font.BOLD, 15));
+        button.setOpaque(true);
+        button.setContentAreaFilled(true);
+        button.setBorderPainted(false);
+        button.setBorder(new CompoundBorder(
+                new LineBorder(new Color(20, 110, 130), 1, true),
+                new EmptyBorder(12, 18, 12, 18)
+        ));
+        button.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        return button;
+    }
+
+    private JButton createNeutralButton(String text) {
+        JButton button = new JButton(text);
+        button.setFocusPainted(false);
+        button.setBackground(new Color(108, 117, 125));
+        button.setForeground(Color.WHITE);
+        button.setFont(new Font("Segoe UI", Font.BOLD, 15));
+        button.setOpaque(true);
+        button.setContentAreaFilled(true);
+        button.setBorderPainted(false);
+        button.setBorder(new CompoundBorder(
+                new LineBorder(new Color(80, 85, 90), 1, true),
+                new EmptyBorder(12, 18, 12, 18)
+        ));
+        button.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        return button;
+    }
+
+    private void openSelectedRequest() {
+        RequestListItem selected = requestList.getSelectedValue();
+
+        if (selected == null) {
+            JOptionPane.showMessageDialog(this,
+                    "Please select a certification request first.",
+                    "No Request Selected",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        loadRequestById(selected.certId);
+        showDetailScreen();
+    }
+
+    private void loadRequestList() {
+        resetDisplayedRequest();
+        requestListModel.clear();
+        currentStudentId = 0;
+
+        int userId = Session.getUserId();
+        if (userId == 0) {
+            return;
+        }
+
+        String studentQuery = """
+                SELECT student_id
+                FROM student
+                WHERE user_id = ?
+                """;
+
+        String requestQuery = """
+                SELECT cert_id,
+                       academic_term_code,
+                       status,
+                       last_updated_date
+                FROM cert_request
+                WHERE student_id = ?
+                ORDER BY last_updated_date DESC, cert_id DESC
+                """;
+
+        try (Connection conn = getConnection()) {
+            try (PreparedStatement ps = conn.prepareStatement(studentQuery)) {
+                ps.setInt(1, userId);
+
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) {
+                        JOptionPane.showMessageDialog(this,
+                                "No student record found for the current user.",
+                                "No Student Record",
+                                JOptionPane.WARNING_MESSAGE);
+                        return;
+                    }
+                    currentStudentId = rs.getInt("student_id");
+                }
+            }
+
+            List<RequestListItem> items = new ArrayList<>();
+
+            try (PreparedStatement ps = conn.prepareStatement(requestQuery)) {
+                ps.setInt(1, currentStudentId);
+
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        int certId = rs.getInt("cert_id");
+                        int termCode = rs.getInt("academic_term_code");
+                        String status = rs.getString("status");
+
+                        items.add(new RequestListItem(
+                                certId,
+                                "REQ-" + certId,
+                                formatAcademicTerm(termCode),
+                                status != null ? status : "Unknown"
+                        ));
+                    }
+                }
+            }
+
+            if (items.isEmpty()) {
+                JOptionPane.showMessageDialog(this,
+                        "No certification requests were found.",
+                        "No Requests",
+                        JOptionPane.INFORMATION_MESSAGE);
+                return;
+            }
+
+            for (RequestListItem item : items) {
+                requestListModel.addElement(item);
+            }
+
+            requestList.clearSelection();
+
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+            JOptionPane.showMessageDialog(this,
+                    "Failed to load certification request list.\n" + ex.getMessage(),
+                    "Database Error",
+                    JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void loadRequestById(int certId) {
+        if (currentStudentId == 0 || certId == 0) {
+            showNoDataState("No certification request found.");
             return;
         }
 
         String sql = """
-            SELECT
-                cr.cert_id,
-                cr.academic_term_code,
-                cr.status,
-                cr.total_units,
-                cr.unit_load_category,
-                s.benefit_type,
-                mac.estimated_monthly_allowance,
-                COALESCE(cr.sco_note, '') AS sco_note,
-                COALESCE(cr.cancel_requested, 0) AS cancel_requested
-            FROM cert_request cr
-            JOIN student s ON cr.student_id = s.student_id
-            LEFT JOIN monthly_allowance_calculator mac ON cr.cert_id = mac.cert_id
-            WHERE s.user_id = ?
-            ORDER BY cr.last_updated_date DESC, cr.cert_id DESC
-            LIMIT 1
-            """;
+                SELECT
+                    cr.cert_id,
+                    cr.academic_term_code,
+                    cr.status,
+                    cr.total_units,
+                    cr.unit_load_category,
+                    s.benefit_type,
+                    mac.estimated_monthly_allowance,
+                    COALESCE(cr.sco_note, '') AS sco_note,
+                    COALESCE(cr.cancel_requested, 0) AS cancel_requested
+                FROM cert_request cr
+                JOIN student s ON cr.student_id = s.student_id
+                LEFT JOIN monthly_allowance_calculator mac ON cr.cert_id = mac.cert_id
+                WHERE cr.cert_id = ?
+                  AND cr.student_id = ?
+                """;
 
         try (Connection conn = getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
-            ps.setInt(1, Session.getUserId());
+            ps.setInt(1, certId);
+            ps.setInt(2, currentStudentId);
 
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
-                    int certId = rs.getInt("cert_id");
                     int academicTermCode = rs.getInt("academic_term_code");
                     String status = rs.getString("status");
                     double totalUnits = rs.getDouble("total_units");
@@ -290,7 +559,7 @@ public class ViewRequestStatusPanel extends JPanel {
                     estimatedAllowanceValue.setText(String.format("$%,.2f / month", estimatedAllowance));
                     trainingTimeValue.setText(formatTrainingTime(unitLoadCategory));
 
-                    updateStatusPanel(status);
+                    updateStatusPanel(status != null ? status : "Unknown");
                     updateScoMessage(status, scoNote, cancelRequested);
                     loadCoursesForRequest(conn, certId);
                 } else {
@@ -300,12 +569,10 @@ public class ViewRequestStatusPanel extends JPanel {
 
         } catch (SQLException ex) {
             ex.printStackTrace();
-            JOptionPane.showMessageDialog(
-                    this,
+            JOptionPane.showMessageDialog(this,
                     "Failed to load request status.\n" + ex.getMessage(),
                     "Database Error",
-                    JOptionPane.ERROR_MESSAGE
-            );
+                    JOptionPane.ERROR_MESSAGE);
             showNoDataState("Unable to load data.");
         }
     }
@@ -321,7 +588,7 @@ public class ViewRequestStatusPanel extends JPanel {
             return;
         }
 
-        if ("Action Needed".equals(status)) {
+        if ("Action Needed".equals(status) || "Error".equals(status)) {
             scoMessageArea.setText("Your certification needs correction. Please review the request and make the required changes.");
             return;
         }
@@ -331,18 +598,18 @@ public class ViewRequestStatusPanel extends JPanel {
 
     private void loadCoursesForRequest(Connection conn, int certId) throws SQLException {
         String sql = """
-            SELECT
-                section_number,
-                course_prefix,
-                course_number,
-                title,
-                crn,
-                units,
-                course_length_weeks
-            FROM course
-            WHERE cert_id = ?
-            ORDER BY course_prefix, course_number, section_number
-            """;
+                SELECT
+                    section_number,
+                    course_prefix,
+                    course_number,
+                    title,
+                    crn,
+                    units,
+                    course_length_weeks
+                FROM course
+                WHERE cert_id = ?
+                ORDER BY course_prefix, course_number, section_number
+                """;
 
         coursesTableModel.setRowCount(0);
         int courseCount = 0;
@@ -369,7 +636,7 @@ public class ViewRequestStatusPanel extends JPanel {
         totalClassesValue.setText(String.valueOf(courseCount));
     }
 
-    private void showNoDataState(String message) {
+    private void resetDisplayedRequest() {
         requestIdValue.setText("—");
         termValue.setText("—");
         totalClassesValue.setText("0");
@@ -380,6 +647,10 @@ public class ViewRequestStatusPanel extends JPanel {
         scoMessageArea.setText("No current SCO error message.");
         updateStatusPanel("No Request");
         coursesTableModel.setRowCount(0);
+    }
+
+    private void showNoDataState(String message) {
+        resetDisplayedRequest();
         System.out.println(message);
     }
 
@@ -387,7 +658,7 @@ public class ViewRequestStatusPanel extends JPanel {
         Color color = switch (statusText) {
             case "Submitted" -> STATUS_YELLOW;
             case "In Review" -> STATUS_BLUE;
-            case "Action Needed" -> STATUS_RED;
+            case "Action Needed", "Error" -> STATUS_RED;
             case "Approved", "Certified" -> STATUS_GREEN;
             case "Cancellation Pending" -> STATUS_PURPLE;
             case "Cancelled" -> STATUS_GRAY;
@@ -421,7 +692,6 @@ public class ViewRequestStatusPanel extends JPanel {
 
         Dimension size = label.getPreferredSize();
         label.setPreferredSize(new Dimension(Math.max(size.width, 90), Math.max(size.height, 26)));
-
         return label;
     }
 
@@ -480,5 +750,24 @@ public class ViewRequestStatusPanel extends JPanel {
             return String.valueOf((long) value);
         }
         return String.valueOf(value);
+    }
+
+    private static class RequestListItem {
+        private final int certId;
+        private final String requestLabel;
+        private final String termLabel;
+        private final String status;
+
+        private RequestListItem(int certId, String requestLabel, String termLabel, String status) {
+            this.certId = certId;
+            this.requestLabel = requestLabel;
+            this.termLabel = termLabel;
+            this.status = status;
+        }
+
+        @Override
+        public String toString() {
+            return requestLabel + " - " + termLabel + " - " + status;
+        }
     }
 }
