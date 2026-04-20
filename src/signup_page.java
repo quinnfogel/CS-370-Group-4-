@@ -181,10 +181,6 @@ public class signup_page extends JFrame {
         }
     }
 
-    public static void main(String[] args) {
-        SwingUtilities.invokeLater(signup_page::new);
-    }
-
     private void createUIComponents() {
         TitleCLabel = new JLabel("Welcome to VetConnect");
         Font t = TitleCLabel.getFont();

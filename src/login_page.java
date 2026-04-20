@@ -142,10 +142,6 @@ public class login_page extends JFrame {
         }
     }
 
-    public static void main(String[] args) {
-        new login_page();
-    }
-
     private void createUIComponents() {
         TitleLabel = new JLabel("Welcome to VetConnect");
         Font t = TitleLabel.getFont();
