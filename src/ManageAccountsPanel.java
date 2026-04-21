@@ -10,6 +10,7 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.time.LocalDateTime;
 
 public class ManageAccountsPanel extends JPanel {
 
@@ -120,7 +121,7 @@ public class ManageAccountsPanel extends JPanel {
         JPanel panel = createCardPanel("Current SCO Accounts");
         panel.setLayout(new BorderLayout());
 
-        String[] columns = {"User ID", "Employee ID", "First Name", "Last Name", "Email", "Role"};
+        String[] columns = {"User ID", "Employee ID", "First Name", "Last Name", "Email", "Role", "Active"};
 
         tableModel = new DefaultTableModel(columns, 0) {
             @Override
@@ -176,26 +177,43 @@ public class ManageAccountsPanel extends JPanel {
                        u.first_name,
                        u.last_name,
                        u.email,
+                       u.role,
+                       u.is_active,
                        s.emp_id
                 FROM user u
                 JOIN sco s ON u.user_id = s.user_id
-                WHERE u.role = 'SCO'
+                WHERE u.role = ?
                 ORDER BY u.last_name, u.first_name
                 """;
 
         try (Connection conn = DriverManager.getConnection(DB_URL);
-             PreparedStatement pstmt = conn.prepareStatement(sql);
-             ResultSet rs = pstmt.executeQuery()) {
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
-            while (rs.next()) {
-                tableModel.addRow(new Object[]{
-                        rs.getInt("user_id"),
-                        rs.getInt("emp_id"),
-                        rs.getString("first_name"),
-                        rs.getString("last_name"),
-                        rs.getString("email"),
-                        "SCO"
-                });
+            pstmt.setString(1, UserRole.SCO.name());
+
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    SCO sco = new SCO(
+                            rs.getInt("user_id"),
+                            rs.getString("first_name"),
+                            rs.getString("last_name"),
+                            rs.getString("email"),
+                            "",
+                            rs.getBoolean("is_active"),
+                            null,
+                            rs.getInt("emp_id")
+                    );
+
+                    tableModel.addRow(new Object[]{
+                            sco.getUserId(),
+                            sco.getEmpId(),
+                            sco.getFirstName(),
+                            sco.getLastName(),
+                            sco.getEmail(),
+                            sco.getRole().name(),
+                            sco.isActive() ? "Yes" : "No"
+                    });
+                }
             }
 
         } catch (Exception e) {
@@ -258,6 +276,17 @@ public class ManageAccountsPanel extends JPanel {
 
         int employeeId = Integer.parseInt(employeeIdText);
 
+        SCO newSco = new SCO(
+                1,
+                firstName,
+                lastName,
+                email,
+                hashPassword(password),
+                true,
+                null,
+                employeeId
+        );
+
         String duplicateCheckSql = """
                 SELECT 1
                 FROM user u
@@ -267,8 +296,8 @@ public class ManageAccountsPanel extends JPanel {
                 """;
 
         String insertUserSql = """
-                INSERT INTO user (first_name, last_name, email, password_hash, role)
-                VALUES (?, ?, ?, ?, 'SCO')
+                INSERT INTO user (first_name, last_name, email, password_hash, role, is_active, last_login)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """;
 
         String insertScoSql = """
@@ -281,8 +310,8 @@ public class ManageAccountsPanel extends JPanel {
 
             try {
                 try (PreparedStatement checkStmt = conn.prepareStatement(duplicateCheckSql)) {
-                    checkStmt.setString(1, email);
-                    checkStmt.setInt(2, employeeId);
+                    checkStmt.setString(1, newSco.getEmail());
+                    checkStmt.setInt(2, newSco.getEmpId());
 
                     try (ResultSet rs = checkStmt.executeQuery()) {
                         if (rs.next()) {
@@ -299,10 +328,13 @@ public class ManageAccountsPanel extends JPanel {
                 int userId;
 
                 try (PreparedStatement userStmt = conn.prepareStatement(insertUserSql, Statement.RETURN_GENERATED_KEYS)) {
-                    userStmt.setString(1, firstName);
-                    userStmt.setString(2, lastName);
-                    userStmt.setString(3, email);
-                    userStmt.setString(4, hashPassword(password));
+                    userStmt.setString(1, newSco.getFirstName());
+                    userStmt.setString(2, newSco.getLastName());
+                    userStmt.setString(3, newSco.getEmail());
+                    userStmt.setString(4, newSco.getPasswordHash());
+                    userStmt.setString(5, newSco.getRole().name());
+                    userStmt.setBoolean(6, newSco.isActive());
+                    userStmt.setString(7, (String) null);
                     userStmt.executeUpdate();
 
                     try (ResultSet keys = userStmt.getGeneratedKeys()) {
@@ -314,7 +346,7 @@ public class ManageAccountsPanel extends JPanel {
                 }
 
                 try (PreparedStatement scoStmt = conn.prepareStatement(insertScoSql)) {
-                    scoStmt.setInt(1, employeeId);
+                    scoStmt.setInt(1, newSco.getEmpId());
                     scoStmt.setInt(2, userId);
                     scoStmt.executeUpdate();
                 }
@@ -381,20 +413,38 @@ public class ManageAccountsPanel extends JPanel {
             return;
         }
 
-        String sql = "DELETE FROM user WHERE user_id = ?";
+        String deleteScoSql = "DELETE FROM sco WHERE user_id = ?";
+        String deleteUserSql = "DELETE FROM user WHERE user_id = ?";
 
-        try (Connection conn = DriverManager.getConnection(DB_URL);
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (Connection conn = DriverManager.getConnection(DB_URL)) {
+            conn.setAutoCommit(false);
 
-            pstmt.setInt(1, userId);
-            pstmt.executeUpdate();
+            try {
+                try (PreparedStatement scoStmt = conn.prepareStatement(deleteScoSql)) {
+                    scoStmt.setInt(1, userId);
+                    scoStmt.executeUpdate();
+                }
 
-            JOptionPane.showMessageDialog(this,
-                    "SCO account deleted successfully.",
-                    "Deleted",
-                    JOptionPane.INFORMATION_MESSAGE);
+                try (PreparedStatement userStmt = conn.prepareStatement(deleteUserSql)) {
+                    userStmt.setInt(1, userId);
+                    userStmt.executeUpdate();
+                }
 
-            loadAccounts();
+                conn.commit();
+
+                JOptionPane.showMessageDialog(this,
+                        "SCO account deleted successfully.",
+                        "Deleted",
+                        JOptionPane.INFORMATION_MESSAGE);
+
+                loadAccounts();
+
+            } catch (Exception ex) {
+                conn.rollback();
+                throw ex;
+            } finally {
+                conn.setAutoCommit(true);
+            }
 
         } catch (Exception e) {
             e.printStackTrace();

@@ -8,16 +8,25 @@ public class User {
     private String email;
     private String passwordHash;
     private UserRole role;
+    private boolean isActive;
     private LocalDateTime lastLogin;
 
-    public User(int userId, String firstName, String lastName, String email,
-                String passwordHash, UserRole role, LocalDateTime lastLogin) {
+    public User(int userId,
+                String firstName,
+                String lastName,
+                String email,
+                String passwordHash,
+                UserRole role,
+                boolean isActive,
+                LocalDateTime lastLogin) {
+
         this.userId = userId;
         this.firstName = firstName;
         this.lastName = lastName;
         this.email = email;
         this.passwordHash = passwordHash;
         this.role = role;
+        this.isActive = isActive;
         this.lastLogin = lastLogin;
     }
 
@@ -26,6 +35,9 @@ public class User {
     }
 
     public void setUserId(int userId) {
+        if (userId <= 0) {
+            throw new IllegalArgumentException("User ID must be greater than 0.");
+        }
         this.userId = userId;
     }
 
@@ -84,12 +96,28 @@ public class User {
         this.role = role;
     }
 
+    public boolean isActive() {
+        return isActive;
+    }
+
+    public void activateAccount() {
+        this.isActive = true;
+    }
+
+    public void deactivateAccount() {
+        this.isActive = false;
+    }
+
     public LocalDateTime getLastLogin() {
         return lastLogin;
     }
 
     public void updateLastLogin() {
         this.lastLogin = LocalDateTime.now();
+    }
+
+    public void setLastLogin(LocalDateTime lastLogin) {
+        this.lastLogin = lastLogin;
     }
 
     public String getFullName() {
@@ -102,7 +130,8 @@ public class User {
                 "userId=" + userId +
                 ", fullName='" + getFullName() + '\'' +
                 ", email='" + email + '\'' +
-                ", role='" + role + '\'' +
+                ", role=" + role +
+                ", isActive=" + isActive +
                 ", lastLogin=" + lastLogin +
                 '}';
     }

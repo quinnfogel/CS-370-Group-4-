@@ -1,47 +1,62 @@
 public class Session {
-    private static int userId;
-    private static String email;
-    private static String firstName;
-    private static String lastName;
-    private static String role;
 
-    public static void startSession(int id, String emailAddr, String fname, String lname, String userRole) {
-        userId = id;
-        email = emailAddr;
-        firstName = fname;
-        lastName = lname;
-        role = userRole;
+    private static User currentUser;
+
+    public static void startSession(User user) {
+        currentUser = user;
     }
 
     public static int getUserId() {
-        return userId;
+        return currentUser != null ? currentUser.getUserId() : 0;
     }
 
     public static String getEmail() {
-        return email;
+        return currentUser != null ? currentUser.getEmail() : null;
     }
 
     public static String getFirstName() {
-        return firstName;
+        return currentUser != null ? currentUser.getFirstName() : null;
     }
 
     public static String getLastName() {
-        return lastName;
+        return currentUser != null ? currentUser.getLastName() : null;
     }
 
-    public static String getRole() {
-        return role;
+    public static String getFullName() {
+        return currentUser != null ? currentUser.getFullName() : null;
+    }
+
+    public static UserRole getRole() {
+        return currentUser != null ? currentUser.getRole() : null;
+    }
+
+    public static boolean isActive() {
+        return currentUser != null && currentUser.isActive();
     }
 
     public static boolean isLoggedIn() {
-        return userId != 0;
+        return currentUser != null;
+    }
+
+    public static User getCurrentUser() {
+        return currentUser;
+    }
+
+    public static Student getStudent() {
+        if (currentUser instanceof Student) {
+            return (Student) currentUser;
+        }
+        return null;
+    }
+
+    public static SCO getSCO() {
+        if (currentUser instanceof SCO) {
+            return (SCO) currentUser;
+        }
+        return null;
     }
 
     public static void clearSession() {
-        userId = 0;
-        email = null;
-        firstName = null;
-        lastName = null;
-        role = null;
+        currentUser = null;
     }
 }

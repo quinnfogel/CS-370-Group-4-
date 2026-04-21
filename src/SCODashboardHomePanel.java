@@ -78,18 +78,12 @@ public class SCODashboardHomePanel extends JPanel {
         cardsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
         cardsPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 120));
 
-        int pendingCount = getCount(
-                "SELECT COUNT(*) FROM cert_request WHERE status = 'Submitted' AND is_draft = 0"
-        );
-        int inReviewCount = getCount(
-                "SELECT COUNT(*) FROM cert_request WHERE status = 'In Review' AND is_draft = 0"
-        );
-        int actionNeededCount = getCount(
-                "SELECT COUNT(*) FROM cert_request WHERE status = 'Action Needed' AND is_draft = 0"
-        );
+        int submittedCount = getCountByStatus(RequestStatus.SUBMITTED);
+        int certifiedCount = getCountByStatus(RequestStatus.CERTIFIED);
+        int actionNeededCount = getCountByStatus(RequestStatus.ACTION_NEEDED);
 
-        cardsPanel.add(createSummaryCard("Pending Requests", String.valueOf(pendingCount)));
-        cardsPanel.add(createSummaryCard("In Review", String.valueOf(inReviewCount)));
+        cardsPanel.add(createSummaryCard("Submitted Requests", String.valueOf(submittedCount)));
+        cardsPanel.add(createSummaryCard("Certified", String.valueOf(certifiedCount)));
         cardsPanel.add(createSummaryCard("Action Needed", String.valueOf(actionNeededCount)));
 
         return cardsPanel;
@@ -133,19 +127,19 @@ public class SCODashboardHomePanel extends JPanel {
 
         content.add(createSectionLabel("Recommended SCO Workflow:"));
         content.add(Box.createRigidArea(new Dimension(0, 8)));
-        content.add(createBodyLabel("1. Open Submitted Requests to review newly submitted certifications."));
+        content.add(createBodyLabel("1. Open Certification Queue to review newly submitted certifications."));
         content.add(createBodyLabel("2. Check enrolled classes, total units, and benefit type for the current term."));
-        content.add(createBodyLabel("3. Update the request status to In Review, Approved, or Action Needed."));
+        content.add(createBodyLabel("3. Update the request status to Submitted, Certified, or Action Needed."));
         content.add(createBodyLabel("4. If an issue is found, send the request to Certification Errors for follow-up."));
-        content.add(createBodyLabel("5. Use Manage Requests to search for and update any certification already in the system."));
+        content.add(createBodyLabel("5. Use Request History to search for and review certifications already in the system."));
         content.add(Box.createRigidArea(new Dimension(0, 12)));
 
         content.add(createSectionLabel("Status Guidance:"));
         content.add(Box.createRigidArea(new Dimension(0, 8)));
-        content.add(createBodyLabel("• In Review: Request has been received and is being reviewed by the SCO."));
-        content.add(createBodyLabel("• Approved: Request has been verified and is ready for final processing."));
+        content.add(createBodyLabel("• Submitted: Request has been received and is ready for SCO review."));
+        content.add(createBodyLabel("• Certified: Request has been verified and approved."));
         content.add(createBodyLabel("• Action Needed: Student must update or correct the certification request."));
-        content.add(createBodyLabel("• Cancelled: Student cancelled the certification request."));
+        content.add(createBodyLabel("• Cancelled: Student cancelled the certification request or it was closed."));
 
         panel.add(content, BorderLayout.CENTER);
         panel.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -168,31 +162,10 @@ public class SCODashboardHomePanel extends JPanel {
             }
         };
 
-        Double baseHousingRate = getBaseHousingRate();
-
-        if (baseHousingRate != null) {
-            model.addRow(new Object[]{
-                    "CH33",
-                    formatMoney(baseHousingRate),
-                    formatMoney(baseHousingRate * 0.75),
-                    formatMoney(baseHousingRate * 0.50),
-                    "Calculated from monthly_allowance_config"
-            });
-
-            model.addRow(new Object[]{
-                    "CH33D",
-                    formatMoney(baseHousingRate),
-                    formatMoney(baseHousingRate * 0.75),
-                    formatMoney(baseHousingRate * 0.50),
-                    "Calculated from monthly_allowance_config"
-            });
-        } else {
-            model.addRow(new Object[]{"CH33", "Not Configured", "Not Configured", "Not Configured", "No base_housing_rate found"});
-            model.addRow(new Object[]{"CH33D", "Not Configured", "Not Configured", "Not Configured", "No base_housing_rate found"});
-        }
-
-        model.addRow(new Object[]{"CH31", "Varies", "Varies", "Varies", "VR&E rates may differ"});
-        model.addRow(new Object[]{"CH35", "Varies", "Varies", "Varies", "Rate not stored in current database"});
+        addRateRow(model, BenefitType.CH33, "Uses MonthlyAllowanceCalculator");
+        addRateRow(model, BenefitType.CH33D, "Uses MonthlyAllowanceCalculator");
+        addRateRow(model, BenefitType.CH31, "Uses MonthlyAllowanceCalculator");
+        addRateRow(model, BenefitType.CH35, "Uses MonthlyAllowanceCalculator");
 
         JTable table = new JTable(model);
         table.setRowHeight(28);
@@ -217,6 +190,20 @@ public class SCODashboardHomePanel extends JPanel {
         return panel;
     }
 
+    private void addRateRow(DefaultTableModel model, BenefitType benefitType, String note) {
+        double fullTime = MonthlyAllowanceCalculator.calculateMonthlyAllowance(benefitType, "FullTime");
+        double threeQuarter = MonthlyAllowanceCalculator.calculateMonthlyAllowance(benefitType, "ThreeQuarterTime");
+        double halfTime = MonthlyAllowanceCalculator.calculateMonthlyAllowance(benefitType, "HalfTime");
+
+        model.addRow(new Object[]{
+                benefitType.getDisplayName(),
+                formatMoney(fullTime),
+                formatMoney(threeQuarter),
+                formatMoney(halfTime),
+                note
+        });
+    }
+
     private JPanel createNotesPanel() {
         JPanel panel = createCardPanel("Important Notes");
 
@@ -225,22 +212,16 @@ public class SCODashboardHomePanel extends JPanel {
         content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
         content.setBorder(new EmptyBorder(20, 0, 0, 0));
 
-        int submittedCount = getCount(
-                "SELECT COUNT(*) FROM cert_request WHERE status = 'Submitted' AND is_draft = 0"
-        );
-        int unresolvedErrors = getCount(
-                "SELECT COUNT(*) FROM cert_error WHERE is_resolved = 0"
-        );
-        int approvedCount = getCount(
-                "SELECT COUNT(*) FROM cert_request WHERE status = 'Approved' AND is_draft = 0"
-        );
+        int submittedCount = getCountByStatus(RequestStatus.SUBMITTED);
+        int unresolvedErrors = getUnresolvedErrorCount();
+        int certifiedCount = getCountByStatus(RequestStatus.CERTIFIED);
 
         content.add(createBodyLabel("• Submitted requests currently in the system: " + submittedCount));
         content.add(createBodyLabel("• Unresolved certification errors: " + unresolvedErrors));
-        content.add(createBodyLabel("• Approved requests currently in the system: " + approvedCount));
+        content.add(createBodyLabel("• Certified requests currently in the system: " + certifiedCount));
         content.add(createBodyLabel("• CH31 students may also require Purchase Order tracking and bookstore verification."));
         content.add(createBodyLabel("• Certification Errors should be used for requests that require student correction or follow-up."));
-        content.add(createBodyLabel("• Manage Requests should be used when searching for a specific student or certification record."));
+        content.add(createBodyLabel("• Request History should be used when searching for a specific student or certification record."));
 
         panel.add(content, BorderLayout.CENTER);
         return panel;
@@ -284,7 +265,40 @@ public class SCODashboardHomePanel extends JPanel {
         return label;
     }
 
-    private int getCount(String sql) {
+    private int getCountByStatus(RequestStatus status) {
+        if (status == null) {
+            return 0;
+        }
+
+        String sql = """
+                SELECT COUNT(*)
+                FROM cert_request
+                WHERE is_draft = 0
+                  AND status IN (?, ?)
+                """;
+
+        try (Connection conn = DriverManager.getConnection(DB_URL);
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setString(1, status.name());
+            pstmt.setString(2, formatLegacyStatus(status));
+
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1);
+                }
+            }
+
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+
+        return 0;
+    }
+
+    private int getUnresolvedErrorCount() {
+        String sql = "SELECT COUNT(*) FROM cert_error WHERE is_resolved = 0";
+
         try (Connection conn = DriverManager.getConnection(DB_URL);
              PreparedStatement pstmt = conn.prepareStatement(sql);
              ResultSet rs = pstmt.executeQuery()) {
@@ -295,24 +309,18 @@ public class SCODashboardHomePanel extends JPanel {
         } catch (Exception ex) {
             ex.printStackTrace();
         }
+
         return 0;
     }
 
-    private Double getBaseHousingRate() {
-        String sql = "SELECT base_housing_rate FROM monthly_allowance_config WHERE config_id = 1";
-
-        try (Connection conn = DriverManager.getConnection(DB_URL);
-             PreparedStatement pstmt = conn.prepareStatement(sql);
-             ResultSet rs = pstmt.executeQuery()) {
-
-            if (rs.next()) {
-                return rs.getDouble("base_housing_rate");
-            }
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
-
-        return null;
+    private String formatLegacyStatus(RequestStatus status) {
+        return switch (status) {
+            case SUBMITTED -> "Submitted";
+            case ACTION_NEEDED -> "Action Needed";
+            case CERTIFIED -> "Certified";
+            case CANCELLED -> "Cancelled";
+            default -> "N/A";
+        };
     }
 
     private String formatMoney(double amount) {

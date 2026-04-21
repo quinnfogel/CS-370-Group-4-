@@ -6,6 +6,8 @@ import javax.swing.event.ListSelectionEvent;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.sql.*;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -30,7 +32,6 @@ public class RequestHistoryPanel extends JPanel {
 
     private JTextArea scoMessageArea;
 
-    // Keeps real cert_id values aligned with visible table rows
     private final List<Integer> historyCertIds = new ArrayList<>();
 
     public RequestHistoryPanel() {
@@ -211,17 +212,15 @@ public class RequestHistoryPanel extends JPanel {
         coursesTable.setSelectionBackground(new Color(220, 240, 245));
         coursesTable.setGridColor(StudentDashboard.BORDER);
         coursesTable.setFillsViewportHeight(true);
-
-        // Make the table stretch to fit the available width
         coursesTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
 
-        coursesTable.getColumnModel().getColumn(0).setPreferredWidth(120); // Section Number
-        coursesTable.getColumnModel().getColumn(1).setPreferredWidth(120); // Course Prefix
-        coursesTable.getColumnModel().getColumn(2).setPreferredWidth(120); // Course Number
-        coursesTable.getColumnModel().getColumn(3).setPreferredWidth(420); // Title / Course Name
-        coursesTable.getColumnModel().getColumn(4).setPreferredWidth(110); // CRN
-        coursesTable.getColumnModel().getColumn(5).setPreferredWidth(90);  // Units
-        coursesTable.getColumnModel().getColumn(6).setPreferredWidth(180); // Course Length
+        coursesTable.getColumnModel().getColumn(0).setPreferredWidth(120);
+        coursesTable.getColumnModel().getColumn(1).setPreferredWidth(120);
+        coursesTable.getColumnModel().getColumn(2).setPreferredWidth(120);
+        coursesTable.getColumnModel().getColumn(3).setPreferredWidth(420);
+        coursesTable.getColumnModel().getColumn(4).setPreferredWidth(110);
+        coursesTable.getColumnModel().getColumn(5).setPreferredWidth(90);
+        coursesTable.getColumnModel().getColumn(6).setPreferredWidth(180);
 
         JScrollPane scrollPane = new JScrollPane(coursesTable);
         scrollPane.setBorder(new LineBorder(StudentDashboard.BORDER, 1, true));
@@ -266,16 +265,16 @@ public class RequestHistoryPanel extends JPanel {
                 while (rs.next()) {
                     int certId = rs.getInt("cert_id");
                     int termCode = rs.getInt("academic_term_code");
-                    String benefitType = rs.getString("benefit_type");
-                    String status = rs.getString("status");
+                    BenefitType benefitType = parseBenefitType(rs.getString("benefit_type"));
+                    RequestStatus status = parseRequestStatus(rs.getString("status"));
                     String submittedOn = rs.getString("submitted_on");
 
                     historyCertIds.add(certId);
                     historyTableModel.addRow(new Object[]{
                             formatRequestId(certId),
                             formatAcademicTerm(termCode),
-                            benefitType,
-                            status,
+                            formatBenefitType(benefitType),
+                            formatStatus(status),
                             submittedOn != null ? submittedOn : "-"
                     });
                 }
@@ -297,133 +296,176 @@ public class RequestHistoryPanel extends JPanel {
     }
 
     private void loadSelectedRequestDetails(int certId) {
-        loadRequestSummary(certId);
-        loadCoursesForRequest(certId);
-        loadScoMessage(certId);
+        try (Connection conn = getConnection()) {
+            CertRequest certRequest = loadCertRequest(conn, certId);
+
+            if (certRequest == null) {
+                clearSummary();
+                coursesTableModel.setRowCount(0);
+                scoMessageArea.setText("No SCO note or error message for this request.");
+                return;
+            }
+
+            displayRequestSummary(certRequest);
+            displayCourses(certRequest.getCourses());
+            displayScoMessage(certRequest);
+
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Unable to load request details.\n" + ex.getMessage(),
+                    "Database Error",
+                    JOptionPane.ERROR_MESSAGE
+            );
+        }
     }
 
-    private void loadRequestSummary(int certId) {
+    private CertRequest loadCertRequest(Connection conn, int certId) throws SQLException {
         String sql =
-                "SELECT cr.cert_id, cr.academic_term_code, s.benefit_type, cr.status, " +
+                "SELECT cr.cert_id, cr.academic_term_code, cr.status, cr.submission_date, cr.last_updated_date, " +
                         "       cr.total_units, cr.unit_load_category, " +
-                        "       COALESCE(mac.estimated_monthly_allowance, 0) AS estimated_monthly_allowance, " +
-                        "       (SELECT COUNT(*) FROM course c WHERE c.cert_id = cr.cert_id) AS total_classes " +
+                        "       COALESCE(cr.sco_note, '') AS sco_note, " +
+                        "       COALESCE(cr.cancel_requested, 0) AS cancel_requested, " +
+                        "       s.benefit_type " +
                         "FROM cert_request cr " +
                         "JOIN student s ON cr.student_id = s.student_id " +
-                        "LEFT JOIN monthly_allowance_calculator mac ON cr.cert_id = mac.cert_id " +
                         "WHERE cr.cert_id = ?";
 
-        try (Connection conn = getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, certId);
 
             try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    requestIdValue.setText(formatRequestId(rs.getInt("cert_id")));
-                    termValue.setText(formatAcademicTerm(rs.getInt("academic_term_code")));
-                    benefitTypeValue.setText(rs.getString("benefit_type"));
-                    statusValue.setText(rs.getString("status"));
-                    totalClassesValue.setText(String.valueOf(rs.getInt("total_classes")));
-                    totalUnitsValue.setText(formatNumber(rs.getDouble("total_units")));
-                    trainingTimeValue.setText(formatTrainingTime(rs.getString("unit_load_category")));
-                    allowanceValue.setText("$" + String.format("%.2f", rs.getDouble("estimated_monthly_allowance")) + " / month");
-                    applyStatusColor(statusValue.getText());
-                } else {
-                    clearSummary();
+                if (!rs.next()) {
+                    return null;
                 }
-            }
 
-        } catch (SQLException ex) {
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Unable to load request summary.\n" + ex.getMessage(),
-                    "Database Error",
-                    JOptionPane.ERROR_MESSAGE
-            );
+                BenefitType benefitType = parseBenefitType(rs.getString("benefit_type"));
+                if (benefitType == null) {
+                    benefitType = BenefitType.CH33;
+                }
+
+                CertRequest certRequest = new CertRequest(
+                        rs.getInt("cert_id"),
+                        rs.getInt("academic_term_code"),
+                        benefitType
+                );
+
+                List<Course> courses = loadCoursesForRequest(conn, certId);
+                for (Course course : courses) {
+                    certRequest.addCourse(course);
+                }
+
+                RequestStatus status = parseRequestStatus(rs.getString("status"));
+                String scoNote = rs.getString("sco_note");
+                boolean cancelRequested = rs.getInt("cancel_requested") == 1;
+
+                if (status == RequestStatus.SUBMITTED) {
+                    certRequest.submit();
+                } else if (status == RequestStatus.ACTION_NEEDED) {
+                    certRequest.submit();
+                    certRequest.markActionNeeded(scoNote);
+                } else if (status == RequestStatus.CERTIFIED) {
+                    certRequest.submit();
+                    certRequest.resolveAllErrors();
+                    certRequest.markCertified();
+                } else if (status == RequestStatus.CANCELLED) {
+                    certRequest.cancel();
+                }
+
+                if (scoNote != null && !scoNote.isBlank() && status != RequestStatus.ACTION_NEEDED) {
+                    certRequest.setScoNote(scoNote);
+                }
+
+                if (cancelRequested && certRequest.getStatus() != RequestStatus.CANCELLED) {
+                    certRequest.setScoNote("Student requested cancellation. Waiting for SCO approval.");
+                }
+
+                return certRequest;
+            }
         }
     }
 
-    private void loadScoMessage(int certId) {
-        String sql =
-                "SELECT COALESCE(status, '') AS status, " +
-                        "       COALESCE(sco_note, '') AS sco_note, " +
-                        "       COALESCE(cancel_requested, 0) AS cancel_requested " +
-                        "FROM cert_request " +
-                        "WHERE cert_id = ?";
-
-        try (Connection conn = getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
-            ps.setInt(1, certId);
-
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    String status = rs.getString("status");
-                    String scoNote = rs.getString("sco_note");
-                    boolean cancelRequested = rs.getInt("cancel_requested") == 1;
-
-                    if ("Cancellation Pending".equals(status) || cancelRequested) {
-                        scoMessageArea.setText("Student requested cancellation. Waiting for SCO approval.");
-                    } else if (scoNote != null && !scoNote.isBlank()) {
-                        scoMessageArea.setText(scoNote);
-                    } else if ("Action Needed".equals(status)) {
-                        scoMessageArea.setText("This request was marked Action Needed, but no detailed note was saved.");
-                    } else if ("Cancelled".equals(status)) {
-                        scoMessageArea.setText("This certification was cancelled and approved by the SCO.");
-                    } else {
-                        scoMessageArea.setText("No SCO note or error message for this request.");
-                    }
-                } else {
-                    scoMessageArea.setText("No SCO note or error message for this request.");
-                }
-            }
-
-        } catch (SQLException ex) {
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Unable to load SCO message.\n" + ex.getMessage(),
-                    "Database Error",
-                    JOptionPane.ERROR_MESSAGE
-            );
-        }
-    }
-
-    private void loadCoursesForRequest(int certId) {
+    private List<Course> loadCoursesForRequest(Connection conn, int certId) throws SQLException {
         String sql =
                 "SELECT section_number, course_prefix, course_number, title, crn, units, course_length_weeks " +
                         "FROM course " +
                         "WHERE cert_id = ? " +
                         "ORDER BY course_prefix, course_number, section_number";
 
-        coursesTableModel.setRowCount(0);
+        List<Course> courses = new ArrayList<>();
 
-        try (Connection conn = getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, certId);
 
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    coursesTableModel.addRow(new Object[]{
+                    String crnValue = rs.getString("crn");
+
+                    Course course = new Course(
                             rs.getString("section_number"),
                             rs.getString("course_prefix"),
                             rs.getInt("course_number"),
                             rs.getString("title"),
-                            rs.getString("crn"),
-                            formatNumber(rs.getDouble("units")),
+                            crnValue,
+                            rs.getDouble("units"),
                             rs.getInt("course_length_weeks")
-                    });
+                    );
+
+                    courses.add(course);
                 }
             }
+        }
 
-        } catch (SQLException ex) {
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Unable to load course history.\n" + ex.getMessage(),
-                    "Database Error",
-                    JOptionPane.ERROR_MESSAGE
-            );
+        return courses;
+    }
+
+    private void displayRequestSummary(CertRequest certRequest) {
+        requestIdValue.setText(formatRequestId(certRequest.getCertId()));
+        termValue.setText(formatAcademicTerm(certRequest.getAcademicTermCode()));
+        benefitTypeValue.setText(formatBenefitType(certRequest.getBenefitType()));
+        statusValue.setText(formatStatus(certRequest.getStatus()));
+        totalClassesValue.setText(String.valueOf(certRequest.getCourses().size()));
+        totalUnitsValue.setText(formatNumber(certRequest.getTotalUnits()));
+        trainingTimeValue.setText(formatTrainingTime(certRequest.getUnitLoadCategory()));
+        allowanceValue.setText(certRequest.getFormattedEstimatedMonthlyAllowance());
+
+        applyStatusColor(certRequest.getStatus());
+    }
+
+    private void displayCourses(List<Course> courses) {
+        coursesTableModel.setRowCount(0);
+
+        for (Course course : courses) {
+            coursesTableModel.addRow(new Object[]{
+                    course.getSectionNumber(),
+                    course.getCoursePrefix(),
+                    course.getCourseNumber(),
+                    course.getTitle(),
+                    String.valueOf(course.getCrn()),
+                    formatNumber(course.getUnits()),
+                    course.getCourseLengthWeeks()
+            });
+        }
+    }
+
+    private void displayScoMessage(CertRequest certRequest) {
+        String note = certRequest.getScoNote();
+        RequestStatus status = certRequest.getStatus();
+
+        if (status == RequestStatus.CANCELLED && (note == null || note.isBlank())) {
+            scoMessageArea.setText("This certification was cancelled and approved by the SCO.");
+            return;
+        }
+
+        if (note != null && !note.isBlank()) {
+            scoMessageArea.setText(note);
+            return;
+        }
+
+        if (status == RequestStatus.ACTION_NEEDED) {
+            scoMessageArea.setText("This request was marked Action Needed, but no detailed note was saved.");
+        } else {
+            scoMessageArea.setText("No SCO note or error message for this request.");
         }
     }
 
@@ -439,19 +481,17 @@ public class RequestHistoryPanel extends JPanel {
         allowanceValue.setText("");
     }
 
-    private void applyStatusColor(String status) {
+    private void applyStatusColor(RequestStatus status) {
         if (status == null) {
             statusValue.setForeground(StudentDashboard.DARK_TEXT);
             return;
         }
 
         switch (status) {
-            case "Submitted" -> statusValue.setForeground(new Color(204, 153, 0));
-            case "In Review" -> statusValue.setForeground(new Color(40, 90, 180));
-            case "Action Needed" -> statusValue.setForeground(new Color(178, 34, 34));
-            case "Approved", "Certified" -> statusValue.setForeground(new Color(34, 139, 34));
-            case "Cancellation Pending" -> statusValue.setForeground(new Color(128, 0, 128));
-            case "Cancelled" -> statusValue.setForeground(new Color(120, 120, 120));
+            case SUBMITTED -> statusValue.setForeground(new Color(204, 153, 0));
+            case ACTION_NEEDED -> statusValue.setForeground(new Color(178, 34, 34));
+            case CERTIFIED -> statusValue.setForeground(new Color(34, 139, 34));
+            case CANCELLED -> statusValue.setForeground(new Color(120, 120, 120));
             default -> statusValue.setForeground(StudentDashboard.DARK_TEXT);
         }
     }
@@ -500,6 +540,51 @@ public class RequestHistoryPanel extends JPanel {
 
     private String formatRequestId(int certId) {
         return "REQ-" + certId;
+    }
+
+    private BenefitType parseBenefitType(String dbValue) {
+        if (dbValue == null || dbValue.isBlank()) {
+            return null;
+        }
+
+        try {
+            return BenefitType.valueOf(dbValue.trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
+    }
+
+    private RequestStatus parseRequestStatus(String dbValue) {
+        if (dbValue == null || dbValue.isBlank()) {
+            return null;
+        }
+
+        try {
+            return RequestStatus.valueOf(dbValue.trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
+    }
+
+    private String formatBenefitType(BenefitType benefitType) {
+        if (benefitType == null) {
+            return "";
+        }
+        return benefitType.getDisplayName();
+    }
+
+    private String formatStatus(RequestStatus status) {
+        if (status == null) {
+            return "";
+        }
+
+        return switch (status) {
+            case SUBMITTED -> "Submitted";
+            case ACTION_NEEDED -> "Action Needed";
+            case CERTIFIED -> "Certified";
+            case CANCELLED -> "Cancelled";
+            default -> "";
+        };
     }
 
     private String formatAcademicTerm(int academicTermCode) {

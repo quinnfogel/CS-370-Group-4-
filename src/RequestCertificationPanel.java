@@ -4,11 +4,11 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.border.LineBorder;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.sql.*;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.List;
 
 public class RequestCertificationPanel extends JPanel {
 
@@ -34,6 +34,8 @@ public class RequestCertificationPanel extends JPanel {
     private JLabel totalUnitsValue;
     private JLabel trainingTimeValue;
     private JLabel allowanceValue;
+
+    private final List<Course> pendingCourses = new ArrayList<>();
 
     public RequestCertificationPanel(HomePagePanel homePagePanel) {
         this.homePagePanel = homePagePanel;
@@ -94,7 +96,10 @@ public class RequestCertificationPanel extends JPanel {
         });
 
         benefitTypeComboBox = new JComboBox<>(new String[]{
-                "CH33", "CH33D", "CH31", "CH35"
+                BenefitType.CH33.name(),
+                BenefitType.CH33D.name(),
+                BenefitType.CH31.name(),
+                BenefitType.CH35.name()
         });
 
         formPanel.add(createLabeledField("Term:", termComboBox));
@@ -179,8 +184,6 @@ public class RequestCertificationPanel extends JPanel {
         coursesTable.setSelectionBackground(new Color(220, 240, 245));
         coursesTable.setGridColor(StudentDashboard.BORDER);
         coursesTable.setFillsViewportHeight(true);
-
-        // Make table expand to available width
         coursesTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
 
         coursesTable.getColumnModel().getColumn(0).setPreferredWidth(120);
@@ -217,7 +220,7 @@ public class RequestCertificationPanel extends JPanel {
         totalClassesValue = createValueLabel("0");
         totalUnitsValue = createValueLabel("0");
         trainingTimeValue = createValueLabel("N/A");
-        allowanceValue = createValueLabel("$0 / month");
+        allowanceValue = createValueLabel("$0.00 / month");
 
         infoPanel.add(createLabeledValue("Total Classes:", totalClassesValue));
         infoPanel.add(createLabeledValue("Total Units:", totalUnitsValue));
@@ -332,111 +335,101 @@ public class RequestCertificationPanel extends JPanel {
     }
 
     private void addClassToTable() {
+        try {
+            Course course = buildCourseFromFields();
+
+            if (isDuplicateCourse(course)) {
+                JOptionPane.showMessageDialog(this,
+                        "That course already exists in this certification request.",
+                        "Duplicate Course",
+                        JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+
+            pendingCourses.add(course);
+            tableModel.addRow(new Object[]{
+                    course.getSectionNumber(),
+                    course.getCoursePrefix(),
+                    course.getCourseNumber(),
+                    course.getTitle(),
+                    String.valueOf(course.getCrn()),
+                    stripTrailingZero(course.getUnits()),
+                    course.getCourseLengthWeeks()
+            });
+
+            clearCourseEntryFields();
+            updateSummary();
+
+        } catch (IllegalArgumentException ex) {
+            JOptionPane.showMessageDialog(this,
+                    ex.getMessage(),
+                    "Invalid Input",
+                    JOptionPane.WARNING_MESSAGE);
+        }
+    }
+
+    private Course buildCourseFromFields() {
         String sectionNumber = sectionNumberField.getText().trim().toUpperCase();
         String prefix = prefixField.getText().trim().toUpperCase();
-        String courseNumber = courseNumberField.getText().trim();
+        String courseNumberText = courseNumberField.getText().trim();
         String title = titleField.getText().trim();
-        String crn = crnField.getText().trim();
-        String units = unitsField.getText().trim();
-        String length = lengthField.getText().trim();
+        String crnText = crnField.getText().trim();
+        String unitsText = unitsField.getText().trim();
+        String lengthText = lengthField.getText().trim();
 
-        if (sectionNumber.isEmpty() || prefix.isEmpty() || courseNumber.isEmpty()
-                || title.isEmpty() || crn.isEmpty() || units.isEmpty() || length.isEmpty()) {
-            JOptionPane.showMessageDialog(this,
-                    "Please complete all course fields before adding a class.",
-                    "Missing Information",
-                    JOptionPane.WARNING_MESSAGE);
-            return;
+        if (sectionNumber.isEmpty() || prefix.isEmpty() || courseNumberText.isEmpty()
+                || title.isEmpty() || crnText.isEmpty() || unitsText.isEmpty() || lengthText.isEmpty()) {
+            throw new IllegalArgumentException("Please complete all course fields before adding a class.");
         }
 
         if (sectionNumber.length() > 5) {
-            JOptionPane.showMessageDialog(this,
-                    "Section Number should be short, like 01 or 11A.",
-                    "Invalid Section Number",
-                    JOptionPane.WARNING_MESSAGE);
-            return;
+            throw new IllegalArgumentException("Section Number should be short, like 01 or 11A.");
         }
 
         if (prefix.length() > 6) {
-            JOptionPane.showMessageDialog(this,
-                    "Course Prefix is too long.",
-                    "Invalid Course Prefix",
-                    JOptionPane.WARNING_MESSAGE);
-            return;
+            throw new IllegalArgumentException("Course Prefix is too long.");
         }
 
         if (title.length() > 60) {
-            JOptionPane.showMessageDialog(this,
-                    "Course Name is too long.",
-                    "Invalid Course Name",
-                    JOptionPane.WARNING_MESSAGE);
-            return;
+            throw new IllegalArgumentException("Course Name is too long.");
         }
 
-        if (!crn.matches("\\d{5}")) {
-            JOptionPane.showMessageDialog(this,
-                    "CRN must be exactly 5 digits.",
-                    "Invalid CRN",
-                    JOptionPane.WARNING_MESSAGE);
-            return;
+        if (!crnText.matches("\\d{5}")) {
+            throw new IllegalArgumentException("CRN must be exactly 5 digits.");
         }
+
+        int courseNumber;
+        double units;
+        int courseLengthWeeks;
 
         try {
-            Integer.parseInt(courseNumber);
-            Double.parseDouble(units);
-            Integer.parseInt(length);
+            courseNumber = Integer.parseInt(courseNumberText);
+            units = Double.parseDouble(unitsText);
+            courseLengthWeeks = Integer.parseInt(lengthText);
         } catch (NumberFormatException ex) {
-            JOptionPane.showMessageDialog(this,
-                    "Course Number, Units, and Course Length must be numeric values.",
-                    "Invalid Input",
-                    JOptionPane.WARNING_MESSAGE);
-            return;
+            throw new IllegalArgumentException("Course Number, Units, and Course Length must be numeric values.");
         }
 
-        double unitsValue = Double.parseDouble(units);
-        int weeksValue = Integer.parseInt(length);
-
-        if (unitsValue <= 0 || weeksValue <= 0) {
-            JOptionPane.showMessageDialog(this,
-                    "Units and Course Length must be greater than 0.",
-                    "Invalid Input",
-                    JOptionPane.WARNING_MESSAGE);
-            return;
+        if (courseNumber <= 0 || units <= 0 || courseLengthWeeks <= 0) {
+            throw new IllegalArgumentException("Course Number, Units, and Course Length must be greater than 0.");
         }
 
-        if (isDuplicateCourse(sectionNumber, prefix, courseNumber, crn)) {
-            JOptionPane.showMessageDialog(this,
-                    "That course already exists in this certification request.",
-                    "Duplicate Course",
-                    JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-
-        tableModel.addRow(new Object[]{
+        return new Course(
                 sectionNumber,
                 prefix,
                 courseNumber,
                 title,
-                crn,
-                stripTrailingZero(unitsValue),
-                String.valueOf(weeksValue)
-        });
-
-        clearCourseEntryFields();
-        updateSummary();
+                crnText,
+                units,
+                courseLengthWeeks
+        );
     }
-
-    private boolean isDuplicateCourse(String sectionNumber, String prefix, String courseNumber, String crn) {
-        for (int i = 0; i < tableModel.getRowCount(); i++) {
-            String existingSection = tableModel.getValueAt(i, 0).toString().trim();
-            String existingPrefix = tableModel.getValueAt(i, 1).toString().trim();
-            String existingNumber = tableModel.getValueAt(i, 2).toString().trim();
-            String existingCrn = tableModel.getValueAt(i, 4).toString().trim();
-
-            if (existingSection.equalsIgnoreCase(sectionNumber)
-                    && existingPrefix.equalsIgnoreCase(prefix)
-                    && existingNumber.equals(courseNumber)
-                    && existingCrn.equals(crn)) {
+    private boolean isDuplicateCourse(Course newCourse) {
+        for (Course existingCourse : pendingCourses) {
+            if (existingCourse.getSectionNumber().equalsIgnoreCase(newCourse.getSectionNumber())
+                    && existingCourse.getCoursePrefix().equalsIgnoreCase(newCourse.getCoursePrefix())
+                    && existingCourse.getCourseNumber() == newCourse.getCourseNumber()
+                    && existingCourse.getCrn().equals(newCourse.getCrn())) {
                 return true;
             }
         }
@@ -455,45 +448,44 @@ public class RequestCertificationPanel extends JPanel {
         }
 
         tableModel.removeRow(selectedRow);
+        pendingCourses.remove(selectedRow);
         updateSummary();
     }
 
     private void updateSummary() {
-        int rowCount = tableModel.getRowCount();
-        double totalUnits = 0.0;
+        CertRequest previewRequest = buildPreviewRequest();
 
-        for (int i = 0; i < rowCount; i++) {
-            totalUnits += Double.parseDouble(tableModel.getValueAt(i, 5).toString());
+        totalClassesValue.setText(String.valueOf(previewRequest.getCourses().size()));
+        totalUnitsValue.setText(stripTrailingZero(previewRequest.getTotalUnits()));
+        trainingTimeValue.setText(formatTrainingTime(previewRequest.getUnitLoadCategory()));
+        allowanceValue.setText(previewRequest.getFormattedEstimatedMonthlyAllowance());
+    }
+
+    private CertRequest buildPreviewRequest() {
+        BenefitType benefitType = getSelectedBenefitType();
+        int academicTermCode = getAcademicTermCode(termComboBox.getSelectedItem().toString());
+
+        CertRequest previewRequest = new CertRequest(1, academicTermCode, benefitType);
+
+        for (Course course : pendingCourses) {
+            previewRequest.addCourse(course);
         }
 
-        totalClassesValue.setText(String.valueOf(rowCount));
-        totalUnitsValue.setText(stripTrailingZero(totalUnits));
-        trainingTimeValue.setText(getTrainingTime(totalUnits));
-        allowanceValue.setText(getEstimatedAllowance(totalUnits));
+        return previewRequest;
     }
 
-    private String getTrainingTime(double totalUnits) {
-        if (totalUnits >= 12) return "Full-Time";
-        if (totalUnits >= 9) return "3/4-Time";
-        if (totalUnits >= 6) return "Half-Time";
-        if (totalUnits > 0) return "Less Than Half-Time";
-        return "N/A";
+    private String formatTrainingTime(String unitLoadCategory) {
+        return switch (unitLoadCategory) {
+            case "FullTime" -> "Full-Time";
+            case "ThreeQuarterTime" -> "3/4-Time";
+            case "HalfTime" -> "Half-Time";
+            case "LessThanHalfTime" -> "Less Than Half-Time";
+            default -> "N/A";
+        };
     }
 
-    private String getUnitLoadCategory(double totalUnits) {
-        if (totalUnits >= 12) return "FullTime";
-        if (totalUnits >= 9) return "ThreeQuarterTime";
-        if (totalUnits >= 6) return "HalfTime";
-        if (totalUnits > 0) return "LessThanHalfTime";
-        return "LessThanHalfTime";
-    }
-
-    private String getEstimatedAllowance(double totalUnits) {
-        if (totalUnits >= 12) return "$3,200 / month";
-        if (totalUnits >= 9) return "$2,400 / month";
-        if (totalUnits >= 6) return "$1,600 / month";
-        if (totalUnits > 0) return "$800 / month";
-        return "$0 / month";
+    private BenefitType getSelectedBenefitType() {
+        return BenefitType.valueOf(benefitTypeComboBox.getSelectedItem().toString());
     }
 
     private int getAcademicTermCode(String selectedTerm) {
@@ -505,15 +497,41 @@ public class RequestCertificationPanel extends JPanel {
         };
     }
 
-    private int getStudentId(Connection conn, int userId) throws SQLException {
-        String sql = "SELECT student_id FROM student WHERE user_id = ?";
+    private Student loadStudent(Connection conn, int userId) throws SQLException {
+        String sql = """
+                SELECT u.user_id, u.first_name, u.last_name, u.email, u.password_hash,
+                       u.is_active, u.last_login, s.student_id, s.benefit_type
+                FROM "user" u
+                JOIN student s ON u.user_id = s.user_id
+                WHERE u.user_id = ?
+                """;
 
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, userId);
 
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
-                    return rs.getInt("student_id");
+                    LocalDateTime lastLogin = parseDateTime(rs.getString("last_login"));
+
+                    BenefitType benefitType;
+                    String dbBenefitType = rs.getString("benefit_type");
+                    try {
+                        benefitType = BenefitType.valueOf(dbBenefitType);
+                    } catch (Exception ex) {
+                        benefitType = getSelectedBenefitType();
+                    }
+
+                    return new Student(
+                            rs.getInt("user_id"),
+                            rs.getString("first_name"),
+                            rs.getString("last_name"),
+                            rs.getString("email"),
+                            rs.getString("password_hash"),
+                            rs.getBoolean("is_active"),
+                            lastLogin,
+                            rs.getInt("student_id"),
+                            benefitType
+                    );
                 }
             }
         }
@@ -521,8 +539,20 @@ public class RequestCertificationPanel extends JPanel {
         throw new SQLException("Student record not found for user.");
     }
 
+    private LocalDateTime parseDateTime(String dateTimeText) {
+        if (dateTimeText == null || dateTimeText.isBlank()) {
+            return null;
+        }
+
+        try {
+            return LocalDateTime.parse(dateTimeText.replace(" ", "T"));
+        } catch (DateTimeParseException ex) {
+            return null;
+        }
+    }
+
     private void submitCertificationRequest() {
-        if (tableModel.getRowCount() == 0) {
+        if (pendingCourses.isEmpty()) {
             JOptionPane.showMessageDialog(this,
                     "Please add at least one class before submitting your certification request.",
                     "No Classes Added",
@@ -538,111 +568,40 @@ public class RequestCertificationPanel extends JPanel {
             return;
         }
 
-        double totalUnits = Double.parseDouble(totalUnitsValue.getText());
-        String selectedBenefitType = benefitTypeComboBox.getSelectedItem().toString();
-        String selectedTerm = termComboBox.getSelectedItem().toString();
-        int academicTermCode = getAcademicTermCode(selectedTerm);
-        String unitLoadCategory = getUnitLoadCategory(totalUnits);
-
-        String updateStudentSql = """
-            UPDATE student
-            SET benefit_type = ?
-            WHERE user_id = ?
-            """;
-
-        String insertRequestSql = """
-            INSERT INTO cert_request (
-                student_id,
-                academic_term_code,
-                status,
-                submission_date,
-                last_updated_date,
-                total_units,
-                unit_load_category,
-                is_draft
-            ) VALUES (?, ?, 'Submitted', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?, ?, 0)
-            """;
-
-        String insertCourseSql = """
-            INSERT INTO course (
-                cert_id,
-                section_number,
-                course_prefix,
-                course_number,
-                title,
-                crn,
-                units,
-                course_length_weeks
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """;
+        BenefitType selectedBenefitType = getSelectedBenefitType();
+        int academicTermCode = getAcademicTermCode(termComboBox.getSelectedItem().toString());
 
         try (Connection conn = DriverManager.getConnection(DB_URL)) {
             conn.setAutoCommit(false);
 
-            int studentId = getStudentId(conn, Session.getUserId());
+            try {
+                Student student = loadStudent(conn, Session.getUserId());
+                student.setBenefitType(selectedBenefitType);
 
-            try (PreparedStatement updateStudentPs = conn.prepareStatement(updateStudentSql);
-                 PreparedStatement insertRequestPs = conn.prepareStatement(insertRequestSql, PreparedStatement.RETURN_GENERATED_KEYS);
-                 PreparedStatement insertCoursePs = conn.prepareStatement(insertCourseSql)) {
+                CertRequest certRequest = createRequestFromObjects(student, academicTermCode);
 
-                updateStudentPs.setString(1, selectedBenefitType);
-                updateStudentPs.setInt(2, Session.getUserId());
-                updateStudentPs.executeUpdate();
-
-                insertRequestPs.setInt(1, studentId);
-                insertRequestPs.setInt(2, academicTermCode);
-                insertRequestPs.setDouble(3, totalUnits);
-                insertRequestPs.setString(4, unitLoadCategory);
-                insertRequestPs.executeUpdate();
-
-                int certId;
-                try (ResultSet rs = insertRequestPs.getGeneratedKeys()) {
-                    if (rs.next()) {
-                        certId = rs.getInt(1);
-
-                    } else {
-                        throw new SQLException("Failed to retrieve generated cert_id.");
-                    }
-                }
-
-                upsertMonthlyAllowance(conn, certId, selectedBenefitType, unitLoadCategory);
-
-                for (int i = 0; i < tableModel.getRowCount(); i++) {
-                    String sectionNumber = tableModel.getValueAt(i, 0).toString();
-                    String prefix = tableModel.getValueAt(i, 1).toString();
-                    int courseNumber = Integer.parseInt(tableModel.getValueAt(i, 2).toString());
-                    String title = tableModel.getValueAt(i, 3).toString();
-                    String crn = tableModel.getValueAt(i, 4).toString();
-                    double units = Double.parseDouble(tableModel.getValueAt(i, 5).toString());
-                    int weeks = Integer.parseInt(tableModel.getValueAt(i, 6).toString());
-
-                    insertCoursePs.setInt(1, certId);
-                    insertCoursePs.setString(2, sectionNumber);
-                    insertCoursePs.setString(3, prefix);
-                    insertCoursePs.setInt(4, courseNumber);
-                    insertCoursePs.setString(5, title);
-                    insertCoursePs.setString(6, crn);
-                    insertCoursePs.setDouble(7, units);
-                    insertCoursePs.setInt(8, weeks);
-                    insertCoursePs.executeUpdate();
-                }
+                saveStudentBenefitType(conn, student);
+                int certId = saveCertRequest(conn, student, certRequest);
+                saveCourses(conn, certId, certRequest.getCourses());
+                saveMonthlyAllowance(conn, certId, certRequest);
 
                 conn.commit();
+
+                JOptionPane.showMessageDialog(this,
+                        "Certification request submitted successfully.",
+                        "Submission Complete",
+                        JOptionPane.INFORMATION_MESSAGE);
+
+                if (homePagePanel != null) {
+                    homePagePanel.refreshSummary();
+                }
+
+                clearForm();
+
             } catch (Exception ex) {
                 conn.rollback();
                 throw ex;
             }
-
-            JOptionPane.showMessageDialog(this,
-                    "Certification request submitted successfully.",
-                    "Submission Complete",
-                    JOptionPane.INFORMATION_MESSAGE);
-
-            if (homePagePanel != null) {
-                homePagePanel.refreshSummary();
-            }
-
-            clearForm();
 
         } catch (Exception ex) {
             ex.printStackTrace();
@@ -650,6 +609,118 @@ public class RequestCertificationPanel extends JPanel {
                     "Failed to submit certification request.\n" + ex.getMessage(),
                     "Database Error",
                     JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private CertRequest createRequestFromObjects(Student student, int academicTermCode) {
+        int generatedCertId = generateTempCertId();
+        CertRequest certRequest = student.createCertRequest(generatedCertId, academicTermCode);
+
+        for (Course course : pendingCourses) {
+            certRequest.addCourse(course);
+        }
+
+        certRequest.submit();
+        return certRequest;
+    }
+
+    private int generateTempCertId() {
+        return (int) (System.currentTimeMillis() % Integer.MAX_VALUE);
+    }
+
+    private void saveStudentBenefitType(Connection conn, Student student) throws SQLException {
+        String sql = """
+                UPDATE student
+                SET benefit_type = ?
+                WHERE user_id = ?
+                """;
+
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, student.getBenefitType().name());
+            ps.setInt(2, student.getUserId());
+            ps.executeUpdate();
+        }
+    }
+
+    private int saveCertRequest(Connection conn, Student student, CertRequest certRequest) throws SQLException {
+        String sql = """
+                INSERT INTO cert_request (
+                    student_id,
+                    academic_term_code,
+                    status,
+                    submission_date,
+                    last_updated_date,
+                    total_units,
+                    unit_load_category,
+                    is_draft
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, 0)
+                """;
+
+        try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            ps.setInt(1, student.getStudentId());
+            ps.setInt(2, certRequest.getAcademicTermCode());
+            ps.setString(3, certRequest.getStatus().name());
+            ps.setString(4, certRequest.getSubmissionDate() != null ? certRequest.getSubmissionDate().toString() : null);
+            ps.setString(5, certRequest.getLastUpdatedDate() != null ? certRequest.getLastUpdatedDate().toString() : null);
+            ps.setDouble(6, certRequest.getTotalUnits());
+            ps.setString(7, certRequest.getUnitLoadCategory());
+
+            ps.executeUpdate();
+
+            try (ResultSet rs = ps.getGeneratedKeys()) {
+                if (rs.next()) {
+                    return rs.getInt(1);
+                }
+            }
+        }
+
+        throw new SQLException("Failed to retrieve generated cert_id.");
+    }
+
+    private void saveCourses(Connection conn, int certId, List<Course> courses) throws SQLException {
+        String sql = """
+                INSERT INTO course (
+                    cert_id,
+                    section_number,
+                    course_prefix,
+                    course_number,
+                    title,
+                    crn,
+                    units,
+                    course_length_weeks
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """;
+
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            for (Course course : courses) {
+                ps.setInt(1, certId);
+                ps.setString(2, course.getSectionNumber());
+                ps.setString(3, course.getCoursePrefix());
+                ps.setInt(4, course.getCourseNumber());
+                ps.setString(5, course.getTitle());
+                ps.setString(6, String.valueOf(String.valueOf(course.getCrn())));
+                ps.setDouble(7, course.getUnits());
+                ps.setInt(8, course.getCourseLengthWeeks());
+                ps.addBatch();
+            }
+            ps.executeBatch();
+        }
+    }
+
+    private void saveMonthlyAllowance(Connection conn, int certId, CertRequest certRequest) throws SQLException {
+        String sql = """
+                INSERT INTO monthly_allowance_calculator (
+                    cert_id,
+                    estimated_monthly_allowance
+                ) VALUES (?, ?)
+                ON CONFLICT(cert_id) DO UPDATE SET
+                    estimated_monthly_allowance = excluded.estimated_monthly_allowance
+                """;
+
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, certId);
+            ps.setDouble(2, certRequest.getEstimatedMonthlyAllowance());
+            ps.executeUpdate();
         }
     }
 
@@ -673,52 +744,10 @@ public class RequestCertificationPanel extends JPanel {
     private void clearForm() {
         clearCourseEntryFields();
         tableModel.setRowCount(0);
+        pendingCourses.clear();
         totalClassesValue.setText("0");
         totalUnitsValue.setText("0");
         trainingTimeValue.setText("N/A");
-        allowanceValue.setText("$0 / month");
-    }
-
-    private void upsertMonthlyAllowance(Connection conn, int certId, String benefitType, String unitLoadCategory) throws SQLException {
-        double amount = calculateAllowanceAmount(benefitType, unitLoadCategory);
-
-        String sql = """
-            INSERT INTO monthly_allowance_calculator (
-                cert_id,
-                estimated_monthly_allowance,
-                calculated_date
-            ) VALUES (?, ?, CURRENT_TIMESTAMP)
-            ON CONFLICT(cert_id) DO UPDATE SET
-                estimated_monthly_allowance = excluded.estimated_monthly_allowance,
-                calculated_date = CURRENT_TIMESTAMP
-            """;
-
-        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setInt(1, certId);
-            pstmt.setDouble(2, amount);
-            pstmt.executeUpdate();
-        }
-    }
-
-    private double calculateAllowanceAmount(String benefitType, String unitLoadCategory) {
-        if (benefitType == null || unitLoadCategory == null) {
-            return 0.0;
-        }
-
-        return switch (benefitType) {
-            case "CH31", "CH33", "CH33D" -> switch (unitLoadCategory) {
-                case "FullTime" -> 3987.0;
-                case "ThreeQuarterTime" -> 3190.0;
-                case "HalfTime" -> 2392.0;
-                default -> 0.0;
-            };
-            case "CH35" -> switch (unitLoadCategory) {
-                case "FullTime" -> 1536.0;
-                case "ThreeQuarterTime" -> 1214.0;
-                case "HalfTime" -> 890.0;
-                default -> 0.0;
-            };
-            default -> 0.0;
-        };
+        allowanceValue.setText("$0.00 / month");
     }
 }

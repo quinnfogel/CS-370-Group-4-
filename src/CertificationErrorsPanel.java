@@ -246,7 +246,7 @@ public class CertificationErrorsPanel extends JPanel {
         formPanel.setBorder(new EmptyBorder(20, 0, 0, 0));
 
         statusComboBox = new JComboBox<>(new String[]{
-                "In Review", "Approved", "Action Needed"
+                "Submitted", "Action Needed", "Certified"
         });
 
         errorNoteArea = new JTextArea(4, 30);
@@ -302,7 +302,7 @@ public class CertificationErrorsPanel extends JPanel {
             JOIN student s ON cr.student_id = s.student_id
             JOIN user u ON s.user_id = u.user_id
             WHERE ce.is_resolved = 0
-              AND cr.status IN ('Action Needed', 'Error')
+              AND cr.status IN ('ACTION_NEEDED', 'Action Needed')
             ORDER BY ce.error_id DESC
             """;
 
@@ -313,6 +313,8 @@ public class CertificationErrorsPanel extends JPanel {
             while (rs.next()) {
                 int errorId = rs.getInt("error_id");
                 int certId = rs.getInt("cert_id");
+                BenefitType benefitType = parseBenefitType(rs.getString("benefit_type"));
+                RequestStatus status = parseRequestStatus(rs.getString("status"));
 
                 errorIds.add(errorId);
                 requestCertIds.add(certId);
@@ -321,8 +323,8 @@ public class CertificationErrorsPanel extends JPanel {
                         formatRequestId(certId),
                         rs.getString("student_name"),
                         formatTerm(rs.getInt("academic_term_code")),
-                        rs.getString("benefit_type"),
-                        rs.getString("status"),
+                        benefitType != null ? benefitType.getDisplayName() : "N/A",
+                        formatStatus(status),
                         rs.getString("error_message")
                 });
             }
@@ -352,54 +354,30 @@ public class CertificationErrorsPanel extends JPanel {
         int certId = requestCertIds.get(row);
         int errorId = errorIds.get(row);
 
-        String requestSql = """
-                SELECT
-                    cr.cert_id,
-                    u.first_name || ' ' || u.last_name AS student_name,
-                    cr.academic_term_code,
-                    s.benefit_type,
-                    cr.status,
-                    cr.total_units,
-                    cr.unit_load_category,
-                    COUNT(c.course_id) AS total_classes
-                FROM cert_request cr
-                JOIN student s ON cr.student_id = s.student_id
-                JOIN user u ON s.user_id = u.user_id
-                LEFT JOIN course c ON cr.cert_id = c.cert_id
-                WHERE cr.cert_id = ?
-                GROUP BY cr.cert_id, student_name, cr.academic_term_code, s.benefit_type,
-                         cr.status, cr.total_units, cr.unit_load_category
-                """;
+        try (Connection conn = DriverManager.getConnection(DB_URL)) {
+            LoadedErrorRequest loaded = loadErrorRequestObject(conn, certId, errorId);
 
-        try (Connection conn = DriverManager.getConnection(DB_URL);
-             PreparedStatement pstmt = conn.prepareStatement(requestSql)) {
-
-            pstmt.setInt(1, certId);
-
-            try (ResultSet rs = pstmt.executeQuery()) {
-                if (rs.next()) {
-                    String benefitType = rs.getString("benefit_type");
-                    String unitLoad = rs.getString("unit_load_category");
-                    double totalUnits = rs.getDouble("total_units");
-                    int totalClasses = rs.getInt("total_classes");
-
-                    requestIdValue.setText(formatRequestId(certId));
-                    studentNameValue.setText(rs.getString("student_name"));
-                    termValue.setText(formatTerm(rs.getInt("academic_term_code")));
-                    benefitTypeValue.setText(benefitType);
-                    statusValue.setText(rs.getString("status"));
-                    totalClassesValue.setText(String.valueOf(totalClasses));
-                    totalUnitsValue.setText(formatUnits(totalUnits));
-                    trainingTimeValue.setText(formatTrainingTime(unitLoad));
-                    allowanceValue.setText(calculateAllowanceText(conn, benefitType, unitLoad));
-
-                    syncStatusComboBox(rs.getString("status"));
-                    errorNoteArea.setText(loadErrorNote(conn, errorId));
-
-                    loadCourses(conn, certId);
-                    return;
-                }
+            if (loaded == null) {
+                clearSelectedErrorDetails();
+                return;
             }
+
+            CertRequest certRequest = loaded.certRequest;
+
+            requestIdValue.setText(formatRequestId(certRequest.getCertId()));
+            studentNameValue.setText(loaded.studentName);
+            termValue.setText(formatTerm(certRequest.getAcademicTermCode()));
+            benefitTypeValue.setText(certRequest.getBenefitType().getDisplayName());
+            statusValue.setText(formatStatus(certRequest.getStatus()));
+            totalClassesValue.setText(String.valueOf(certRequest.getCourses().size()));
+            totalUnitsValue.setText(formatUnits(certRequest.getTotalUnits()));
+            trainingTimeValue.setText(formatTrainingTime(certRequest.getUnitLoadCategory()));
+            allowanceValue.setText(certRequest.getFormattedEstimatedMonthlyAllowance());
+
+            syncStatusComboBox(certRequest.getStatus());
+            errorNoteArea.setText(loaded.errorNote != null ? loaded.errorNote : "");
+
+            loadCourses(certRequest.getCourses());
 
         } catch (Exception ex) {
             ex.printStackTrace();
@@ -408,14 +386,67 @@ public class CertificationErrorsPanel extends JPanel {
                     "Database Error",
                     JOptionPane.ERROR_MESSAGE);
         }
-
-        clearSelectedErrorDetails();
     }
 
-    private void loadCourses(Connection conn, int certId) throws Exception {
-        coursesTableModel.setRowCount(0);
+    private LoadedErrorRequest loadErrorRequestObject(Connection conn, int certId, int errorId) throws Exception {
+        String sql = """
+                SELECT
+                    cr.cert_id,
+                    cr.academic_term_code,
+                    cr.status,
+                    cr.sco_note,
+                    s.benefit_type,
+                    u.first_name || ' ' || u.last_name AS student_name,
+                    ce.error_message
+                FROM cert_request cr
+                JOIN student s ON cr.student_id = s.student_id
+                JOIN user u ON s.user_id = u.user_id
+                JOIN cert_error ce ON ce.cert_id = cr.cert_id
+                WHERE cr.cert_id = ?
+                  AND ce.error_id = ?
+                """;
 
-        String courseSql = """
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setInt(1, certId);
+            pstmt.setInt(2, errorId);
+
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (!rs.next()) {
+                    return null;
+                }
+
+                BenefitType benefitType = parseBenefitType(rs.getString("benefit_type"));
+                if (benefitType == null) {
+                    benefitType = BenefitType.CH33;
+                }
+
+                CertRequest certRequest = new CertRequest(
+                        rs.getInt("cert_id"),
+                        rs.getInt("academic_term_code"),
+                        benefitType
+                );
+
+                List<Course> courses = loadCourseObjects(conn, certId);
+                for (Course course : courses) {
+                    certRequest.addCourse(course);
+                }
+
+                String errorMessage = rs.getString("error_message");
+                CertError certError = new CertError(errorId, certId, errorMessage);
+                certRequest.addError(certError);
+
+                String scoNote = rs.getString("sco_note");
+                if (scoNote != null && !scoNote.isBlank()) {
+                    certRequest.setScoNote(scoNote);
+                }
+
+                return new LoadedErrorRequest(certRequest, rs.getString("student_name"), errorMessage);
+            }
+        }
+    }
+
+    private List<Course> loadCourseObjects(Connection conn, int certId) throws Exception {
+        String sql = """
                 SELECT
                     section_number,
                     course_prefix,
@@ -429,22 +460,44 @@ public class CertificationErrorsPanel extends JPanel {
                 ORDER BY course_prefix, course_number
                 """;
 
-        try (PreparedStatement pstmt = conn.prepareStatement(courseSql)) {
+        List<Course> courses = new ArrayList<>();
+
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setInt(1, certId);
 
             try (ResultSet rs = pstmt.executeQuery()) {
                 while (rs.next()) {
-                    coursesTableModel.addRow(new Object[]{
+                    String crnValue = rs.getString("crn");
+
+                    courses.add(new Course(
                             rs.getString("section_number"),
                             rs.getString("course_prefix"),
-                            String.valueOf(rs.getInt("course_number")),
+                            rs.getInt("course_number"),
                             rs.getString("title"),
-                            rs.getString("crn"),
-                            formatUnits(rs.getDouble("units")),
-                            String.valueOf(rs.getInt("course_length_weeks"))
-                    });
+                            crnValue,
+                            rs.getDouble("units"),
+                            rs.getInt("course_length_weeks")
+                    ));
                 }
             }
+        }
+
+        return courses;
+    }
+
+    private void loadCourses(List<Course> courses) {
+        coursesTableModel.setRowCount(0);
+
+        for (Course course : courses) {
+            coursesTableModel.addRow(new Object[]{
+                    course.getSectionNumber(),
+                    course.getCoursePrefix(),
+                    String.valueOf(course.getCourseNumber()),
+                    course.getTitle(),
+                    course.getCrn(),
+                    formatUnits(course.getUnits()),
+                    String.valueOf(course.getCourseLengthWeeks())
+            });
         }
     }
 
@@ -458,39 +511,56 @@ public class CertificationErrorsPanel extends JPanel {
             return;
         }
 
+        SCO currentSco = Session.getSCO();
+        if (currentSco == null) {
+            JOptionPane.showMessageDialog(this,
+                    "No active SCO session found.",
+                    "Session Error",
+                    JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
         int certId = requestCertIds.get(selectedRow);
-        String newStatus = statusComboBox.getSelectedItem().toString();
+        int errorId = errorIds.get(selectedRow);
         String note = errorNoteArea.getText().trim();
-        Integer empId = getCurrentScoEmpId();
+        RequestStatus selectedStatus = parseRequestStatus(statusComboBox.getSelectedItem().toString());
 
-        String sql = """
-                UPDATE cert_request
-                SET status = ?,
-                    sco_note = ?,
-                    reviewed_by_emp_id = ?,
-                    last_updated_date = CURRENT_TIMESTAMP
-                WHERE cert_id = ?
-                """;
+        if (selectedStatus == null) {
+            JOptionPane.showMessageDialog(this,
+                    "Invalid status selected.",
+                    "Status Error",
+                    JOptionPane.ERROR_MESSAGE);
+            return;
+        }
 
-        try (Connection conn = DriverManager.getConnection(DB_URL);
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (Connection conn = DriverManager.getConnection(DB_URL)) {
+            conn.setAutoCommit(false);
 
-            pstmt.setString(1, newStatus);
-            pstmt.setString(2, note.isEmpty() ? null : note);
+            try {
+                LoadedErrorRequest loaded = loadErrorRequestObject(conn, certId, errorId);
+                if (loaded == null) {
+                    throw new IllegalStateException("Selected error request could not be loaded.");
+                }
 
-            if (empId == null) {
-                pstmt.setNull(3, java.sql.Types.INTEGER);
-            } else {
-                pstmt.setInt(3, empId);
-            }
+                CertRequest certRequest = loaded.certRequest;
 
-            pstmt.setInt(4, certId);
+                if (selectedStatus == RequestStatus.SUBMITTED) {
+                    certRequest.submit();
+                    certRequest.setScoNote(note);
+                } else if (selectedStatus == RequestStatus.ACTION_NEEDED) {
+                    currentSco.markRequestActionNeeded(certRequest, note.isBlank() ? loaded.errorNote : note);
+                } else if (selectedStatus == RequestStatus.CERTIFIED) {
+                    certRequest.resolveAllErrors();
+                    currentSco.certifyRequest(certRequest);
+                }
 
-            int updated = pstmt.executeUpdate();
-            if (updated > 0) {
-                errorsTableModel.setValueAt(newStatus, selectedRow, 4);
-                errorsTableModel.setValueAt(note, selectedRow, 5);
-                statusValue.setText(newStatus);
+                updateCertRequestRecord(conn, certRequest, currentSco.getEmpId());
+
+                if (selectedStatus != RequestStatus.ACTION_NEEDED) {
+                    markErrorResolved(conn, errorId);
+                }
+
+                conn.commit();
 
                 JOptionPane.showMessageDialog(this,
                         "Certification error request updated successfully.",
@@ -498,11 +568,12 @@ public class CertificationErrorsPanel extends JPanel {
                         JOptionPane.INFORMATION_MESSAGE);
 
                 loadErrorRequests();
-            } else {
-                JOptionPane.showMessageDialog(this,
-                        "No request was updated.",
-                        "Update Failed",
-                        JOptionPane.ERROR_MESSAGE);
+
+            } catch (Exception ex) {
+                conn.rollback();
+                throw ex;
+            } finally {
+                conn.setAutoCommit(true);
             }
 
         } catch (Exception ex) {
@@ -524,52 +595,40 @@ public class CertificationErrorsPanel extends JPanel {
             return;
         }
 
+        SCO currentSco = Session.getSCO();
+        if (currentSco == null) {
+            JOptionPane.showMessageDialog(this,
+                    "No active SCO session found.",
+                    "Session Error",
+                    JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
         int certId = requestCertIds.get(selectedRow);
         int errorId = errorIds.get(selectedRow);
         String note = errorNoteArea.getText().trim();
-        Integer empId = getCurrentScoEmpId();
 
         try (Connection conn = DriverManager.getConnection(DB_URL)) {
             conn.setAutoCommit(false);
 
             try {
-                String updateRequestSql = """
-                        UPDATE cert_request
-                        SET status = 'In Review',
-                            sco_note = ?,
-                            reviewed_by_emp_id = ?,
-                            last_updated_date = CURRENT_TIMESTAMP
-                        WHERE cert_id = ?
-                        """;
-
-                try (PreparedStatement pstmt = conn.prepareStatement(updateRequestSql)) {
-                    pstmt.setString(1, note.isEmpty() ? null : note);
-
-                    if (empId == null) {
-                        pstmt.setNull(2, java.sql.Types.INTEGER);
-                    } else {
-                        pstmt.setInt(2, empId);
-                    }
-
-                    pstmt.setInt(3, certId);
-                    pstmt.executeUpdate();
+                LoadedErrorRequest loaded = loadErrorRequestObject(conn, certId, errorId);
+                if (loaded == null) {
+                    throw new IllegalStateException("Selected error request could not be loaded.");
                 }
 
-                String resolveErrorSql = """
-                        UPDATE cert_error
-                        SET is_resolved = 1
-                        WHERE error_id = ?
-                        """;
+                CertRequest certRequest = loaded.certRequest;
+                certRequest.resolveAllErrors();
+                certRequest.submit();
+                certRequest.setScoNote(note);
 
-                try (PreparedStatement pstmt = conn.prepareStatement(resolveErrorSql)) {
-                    pstmt.setInt(1, errorId);
-                    pstmt.executeUpdate();
-                }
+                updateCertRequestRecord(conn, certRequest, currentSco.getEmpId());
+                markErrorResolved(conn, errorId);
 
                 conn.commit();
 
                 JOptionPane.showMessageDialog(this,
-                        "Request moved out of error state and returned to In Review.",
+                        "Request moved out of error state and returned to Submitted.",
                         "Error Resolved",
                         JOptionPane.INFORMATION_MESSAGE);
 
@@ -591,95 +650,48 @@ public class CertificationErrorsPanel extends JPanel {
         }
     }
 
-    private Integer getCurrentScoEmpId() {
-        if (!Session.isLoggedIn()) {
-            return null;
+    private void updateCertRequestRecord(Connection conn, CertRequest certRequest, int empId) throws Exception {
+        String sql = """
+                UPDATE cert_request
+                SET status = ?,
+                    sco_note = ?,
+                    reviewed_by_emp_id = ?,
+                    last_updated_date = CURRENT_TIMESTAMP
+                WHERE cert_id = ?
+                """;
+
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, certRequest.getStatus().name());
+            pstmt.setString(2, certRequest.getScoNote() == null || certRequest.getScoNote().isBlank() ? null : certRequest.getScoNote());
+            pstmt.setInt(3, empId);
+            pstmt.setInt(4, certRequest.getCertId());
+            pstmt.executeUpdate();
         }
-
-        String sql = "SELECT emp_id FROM sco WHERE user_id = ?";
-
-        try (Connection conn = DriverManager.getConnection(DB_URL);
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-
-            pstmt.setInt(1, Session.getUserId());
-
-            try (ResultSet rs = pstmt.executeQuery()) {
-                if (rs.next()) {
-                    return rs.getInt("emp_id");
-                }
-            }
-
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
-
-        return null;
     }
 
-    private String loadErrorNote(Connection conn, int errorId) throws Exception {
-        String sql = "SELECT error_message FROM cert_error WHERE error_id = ?";
+    private void markErrorResolved(Connection conn, int errorId) throws Exception {
+        String sql = """
+                UPDATE cert_error
+                SET is_resolved = 1
+                WHERE error_id = ?
+                """;
 
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setInt(1, errorId);
-
-            try (ResultSet rs = pstmt.executeQuery()) {
-                if (rs.next()) {
-                    String note = rs.getString("error_message");
-                    return note == null ? "" : note;
-                }
-            }
+            pstmt.executeUpdate();
         }
-
-        return "";
     }
 
-    private String calculateAllowanceText(Connection conn, String benefitType, String unitLoadCategory) throws Exception {
-        if (!"CH33".equalsIgnoreCase(benefitType) && !"CH33D".equalsIgnoreCase(benefitType)) {
-            return "Varies";
+    private void syncStatusComboBox(RequestStatus currentStatus) {
+        if (currentStatus == null) {
+            statusComboBox.setSelectedIndex(0);
+            return;
         }
 
-        Double baseRate = getBaseHousingRate(conn);
-        if (baseRate == null) {
-            return "Not Configured";
-        }
-
-        double amount;
-        switch (unitLoadCategory) {
-            case "FullTime":
-                amount = baseRate;
-                break;
-            case "ThreeQuarterTime":
-                amount = baseRate * 0.75;
-                break;
-            case "HalfTime":
-                amount = baseRate * 0.50;
-                break;
-            default:
-                amount = 0.0;
-                break;
-        }
-
-        return formatMoney(amount) + " / month";
-    }
-
-    private Double getBaseHousingRate(Connection conn) throws Exception {
-        String sql = "SELECT base_housing_rate FROM monthly_allowance_config WHERE config_id = 1";
-
-        try (PreparedStatement pstmt = conn.prepareStatement(sql);
-             ResultSet rs = pstmt.executeQuery()) {
-
-            if (rs.next()) {
-                return rs.getDouble("base_housing_rate");
-            }
-        }
-
-        return null;
-    }
-
-    private void syncStatusComboBox(String currentStatus) {
+        String label = formatStatus(currentStatus);
         ComboBoxModel<String> model = statusComboBox.getModel();
         for (int i = 0; i < model.getSize(); i++) {
-            if (model.getElementAt(i).equalsIgnoreCase(currentStatus)) {
+            if (model.getElementAt(i).equalsIgnoreCase(label)) {
                 statusComboBox.setSelectedIndex(i);
                 return;
             }
@@ -699,6 +711,46 @@ public class CertificationErrorsPanel extends JPanel {
         allowanceValue.setText("");
         errorNoteArea.setText("");
         coursesTableModel.setRowCount(0);
+    }
+
+    private BenefitType parseBenefitType(String dbValue) {
+        if (dbValue == null || dbValue.isBlank()) {
+            return null;
+        }
+
+        try {
+            return BenefitType.valueOf(dbValue.trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
+    }
+
+    private RequestStatus parseRequestStatus(String dbValue) {
+        if (dbValue == null || dbValue.isBlank()) {
+            return null;
+        }
+
+        String normalized = dbValue.trim().toUpperCase().replace(" ", "_");
+
+        try {
+            return RequestStatus.valueOf(normalized);
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
+    }
+
+    private String formatStatus(RequestStatus status) {
+        if (status == null) {
+            return "N/A";
+        }
+
+        return switch (status) {
+            case SUBMITTED -> "Submitted";
+            case ACTION_NEEDED -> "Action Needed";
+            case CERTIFIED -> "Certified";
+            case CANCELLED -> "Cancelled";
+            default -> "N/A";
+        };
     }
 
     private String formatRequestId(int certId) {
@@ -723,6 +775,10 @@ public class CertificationErrorsPanel extends JPanel {
     }
 
     private String formatTrainingTime(String unitLoadCategory) {
+        if (unitLoadCategory == null || unitLoadCategory.isBlank()) {
+            return "N/A";
+        }
+
         return switch (unitLoadCategory) {
             case "FullTime" -> "Full-Time";
             case "ThreeQuarterTime" -> "3/4-Time";
@@ -737,10 +793,6 @@ public class CertificationErrorsPanel extends JPanel {
             return String.valueOf((int) units);
         }
         return String.format("%.1f", units);
-    }
-
-    private String formatMoney(double amount) {
-        return String.format("$%,.2f", amount);
     }
 
     private JPanel createCardPanel(String title) {
@@ -813,5 +865,17 @@ public class CertificationErrorsPanel extends JPanel {
         button.setContentAreaFilled(true);
         button.setBorderPainted(true);
         return button;
+    }
+
+    private static class LoadedErrorRequest {
+        private final CertRequest certRequest;
+        private final String studentName;
+        private final String errorNote;
+
+        private LoadedErrorRequest(CertRequest certRequest, String studentName, String errorNote) {
+            this.certRequest = certRequest;
+            this.studentName = studentName;
+            this.errorNote = errorNote;
+        }
     }
 }

@@ -26,6 +26,7 @@ public class signup_page extends JFrame {
     private JTextField FirstNameForm;
 
     private static final String DB_URL = "jdbc:sqlite:database.sqlite";
+    private static final String DEFAULT_BENEFIT_TYPE = "CH33";
 
     public signup_page() {
         setContentPane(MainCPanel);
@@ -86,43 +87,37 @@ public class signup_page extends JFrame {
 
         String passwordHash = hashPassword(password);
 
+        String checkEmailSql = """
+                SELECT 1
+                FROM "user"
+                WHERE email = ?
+                """;
+
         String insertUserSql = """
-                INSERT INTO "user" (first_name, last_name, email, password_hash, role)
-                VALUES (?, ?, ?, ?, 'Student')
+                INSERT INTO "user" (first_name, last_name, email, password_hash, role, is_active, last_login)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """;
 
         String insertStudentSql = """
                 INSERT INTO student (user_id, benefit_type)
-                VALUES (?, 'N/A')
+                VALUES (?, ?)
                 """;
 
         try (Connection conn = DriverManager.getConnection(DB_URL)) {
             conn.setAutoCommit(false);
 
-            try (PreparedStatement userStmt = conn.prepareStatement(insertUserSql, Statement.RETURN_GENERATED_KEYS)) {
-                userStmt.setString(1, firstName);
-                userStmt.setString(2, lastName);
-                userStmt.setString(3, email);
-                userStmt.setString(4, passwordHash);
-
-                int rowsAffected = userStmt.executeUpdate();
-                if (rowsAffected == 0) {
-                    throw new Exception("Failed to create user account.");
+            try {
+                if (emailAlreadyExists(conn, checkEmailSql, email)) {
+                    JOptionPane.showMessageDialog(this,
+                            "That email is already registered.",
+                            "Duplicate Email",
+                            JOptionPane.ERROR_MESSAGE);
+                    conn.rollback();
+                    return;
                 }
 
-                int userId;
-                try (ResultSet keys = userStmt.getGeneratedKeys()) {
-                    if (keys.next()) {
-                        userId = keys.getInt(1);
-                    } else {
-                        throw new Exception("Failed to retrieve generated user ID.");
-                    }
-                }
-
-                try (PreparedStatement studentStmt = conn.prepareStatement(insertStudentSql)) {
-                    studentStmt.setInt(1, userId);
-                    studentStmt.executeUpdate();
-                }
+                int userId = insertUser(conn, insertUserSql, firstName, lastName, email, passwordHash);
+                insertStudent(conn, insertStudentSql, userId, DEFAULT_BENEFIT_TYPE);
 
                 conn.commit();
 
@@ -136,20 +131,12 @@ public class signup_page extends JFrame {
 
             } catch (Exception ex) {
                 conn.rollback();
+                ex.printStackTrace();
 
-                String message = ex.getMessage() == null ? "" : ex.getMessage().toLowerCase();
-                if (message.contains("unique") || message.contains("email")) {
-                    JOptionPane.showMessageDialog(this,
-                            "That email is already registered.",
-                            "Duplicate Email",
-                            JOptionPane.ERROR_MESSAGE);
-                } else {
-                    ex.printStackTrace();
-                    JOptionPane.showMessageDialog(this,
-                            "Error creating account: " + ex.getMessage(),
-                            "Database Error",
-                            JOptionPane.ERROR_MESSAGE);
-                }
+                JOptionPane.showMessageDialog(this,
+                        "Error creating account: " + ex.getMessage(),
+                        "Database Error",
+                        JOptionPane.ERROR_MESSAGE);
             }
 
         } catch (Exception ex) {
@@ -158,6 +145,54 @@ public class signup_page extends JFrame {
                     "Database connection error: " + ex.getMessage(),
                     "Error",
                     JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private boolean emailAlreadyExists(Connection conn, String sql, String email) throws SQLException {
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, email);
+
+            try (ResultSet rs = pstmt.executeQuery()) {
+                return rs.next();
+            }
+        }
+    }
+
+    private int insertUser(Connection conn,
+                           String sql,
+                           String firstName,
+                           String lastName,
+                           String email,
+                           String passwordHash) throws Exception {
+        try (PreparedStatement pstmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            pstmt.setString(1, firstName);
+            pstmt.setString(2, lastName);
+            pstmt.setString(3, email);
+            pstmt.setString(4, passwordHash);
+            pstmt.setString(5, "STUDENT");
+            pstmt.setInt(6, 1);
+            pstmt.setNull(7, Types.TIMESTAMP);
+
+            int rowsAffected = pstmt.executeUpdate();
+            if (rowsAffected == 0) {
+                throw new Exception("Failed to create user account.");
+            }
+
+            try (ResultSet keys = pstmt.getGeneratedKeys()) {
+                if (keys.next()) {
+                    return keys.getInt(1);
+                }
+            }
+        }
+
+        throw new Exception("Failed to retrieve generated user ID.");
+    }
+
+    private void insertStudent(Connection conn, String sql, int userId, String benefitType) throws SQLException {
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setInt(1, userId);
+            pstmt.setString(2, benefitType);
+            pstmt.executeUpdate();
         }
     }
 

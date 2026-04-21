@@ -21,6 +21,18 @@ public class SCODashboard extends JFrame {
     private ManageAccountsPanel manageAccountsPanel;
 
     public SCODashboard() {
+        if (!isAuthorizedSCO()) {
+            JOptionPane.showMessageDialog(this,
+                    "You must be logged in as an SCO to access the SCO Dashboard.",
+                    "Access Denied",
+                    JOptionPane.WARNING_MESSAGE);
+
+            Session.clearSession();
+            new login_page().setVisible(true);
+            dispose();
+            return;
+        }
+
         setTitle("CSUSM VetConnect - SCO Dashboard");
         setSize(1280, 800);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -30,6 +42,13 @@ public class SCODashboard extends JFrame {
         add(createHeader(), BorderLayout.NORTH);
         add(createSidebar(), BorderLayout.WEST);
         add(createContentPanel(), BorderLayout.CENTER);
+    }
+
+    private boolean isAuthorizedSCO() {
+        return Session.isLoggedIn()
+                && Session.getRole() != null
+                && Session.getRole() == UserRole.SCO
+                && Session.isActive();
     }
 
     private JPanel createHeader() {
@@ -45,8 +64,9 @@ public class SCODashboard extends JFrame {
         JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 8));
         rightPanel.setOpaque(false);
 
-        String firstName = Session.getFirstName() != null ? Session.getFirstName() : "";
-        String lastName = Session.getLastName() != null ? Session.getLastName() : "";
+        String firstName = Session.getFirstName() != null ? Session.getFirstName().trim() : "";
+        String lastName = Session.getLastName() != null ? Session.getLastName().trim() : "";
+
         String fullName = (firstName + " " + lastName).trim();
         if (fullName.isEmpty()) {
             fullName = "User";
@@ -56,7 +76,7 @@ public class SCODashboard extends JFrame {
         welcomeLabel.setForeground(Color.WHITE);
         welcomeLabel.setFont(new Font("Segoe UI", Font.PLAIN, 15));
 
-        JLabel roleLabel = new JLabel("Role: " + (Session.getRole() != null ? Session.getRole() : "SCO"));
+        JLabel roleLabel = new JLabel("Role: " + formatRole(Session.getRole()));
         roleLabel.setForeground(Color.WHITE);
         roleLabel.setFont(new Font("Segoe UI", Font.PLAIN, 15));
 
@@ -75,6 +95,17 @@ public class SCODashboard extends JFrame {
         header.add(rightPanel, BorderLayout.EAST);
 
         return header;
+    }
+
+    private String formatRole(UserRole role) {
+        if (role == null) {
+            return "SCO";
+        }
+
+        return switch (role) {
+            case SCO -> "SCO";
+            case STUDENT -> "Student";
+        };
     }
 
     private JPanel createSidebar() {
@@ -143,7 +174,8 @@ public class SCODashboard extends JFrame {
         historyPanel = new SCORequestHistoryPanel();
         contentPanel.add(historyPanel, "HISTORY");
 
-        manageAccountsPanel = new ManageAccountsPanel(Session.getEmail());
+        String sessionEmail = Session.getEmail() != null ? Session.getEmail() : "";
+        manageAccountsPanel = new ManageAccountsPanel(sessionEmail);
         contentPanel.add(manageAccountsPanel, "MANAGE");
 
         cardLayout.show(contentPanel, "HOME");

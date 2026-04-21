@@ -125,11 +125,7 @@ public class HomePagePanel extends JPanel {
                 try (ResultSet rs = pstmt.executeQuery()) {
                     if (rs.next()) {
                         studentId = rs.getInt("student_id");
-
-                        String benefitType = rs.getString("benefit_type");
-                        if (benefitType != null && !benefitType.isBlank()) {
-                            summary.benefitType = benefitType;
-                        }
+                        summary.benefitType = formatBenefitType(rs.getString("benefit_type"));
                     } else {
                         return summary;
                     }
@@ -142,11 +138,7 @@ public class HomePagePanel extends JPanel {
                 try (ResultSet rs = pstmt.executeQuery()) {
                     if (rs.next()) {
                         summary.currentTerm = formatAcademicTerm(rs.getInt("academic_term_code"));
-
-                        String latestStatus = rs.getString("status");
-                        if (latestStatus != null && !latestStatus.isBlank()) {
-                            summary.latestStatus = latestStatus;
-                        }
+                        summary.latestStatus = formatRequestStatus(rs.getString("status"));
                     }
                 }
             }
@@ -158,22 +150,68 @@ public class HomePagePanel extends JPanel {
         return summary;
     }
 
+    private String formatBenefitType(String dbValue) {
+        if (dbValue == null || dbValue.isBlank()) {
+            return "N/A";
+        }
+
+        try {
+            return BenefitType.valueOf(dbValue.trim().toUpperCase()).getDisplayName();
+        } catch (IllegalArgumentException ex) {
+            return dbValue;
+        }
+    }
+
+    private String formatRequestStatus(String dbValue) {
+        if (dbValue == null || dbValue.isBlank()) {
+            return "N/A";
+        }
+
+        try {
+            RequestStatus status = RequestStatus.valueOf(dbValue.trim().toUpperCase());
+
+            return switch (status) {
+                case SUBMITTED -> "Submitted";
+                case ACTION_NEEDED -> "Action Needed";
+                case CERTIFIED -> "Certified";
+                case CANCELLED -> "Cancelled";
+                default -> "N/A";
+            };
+        } catch (IllegalArgumentException ex) {
+            return dbValue;
+        }
+    }
+
     private String formatAcademicTerm(int academicTermCode) {
         String code = String.valueOf(academicTermCode);
 
-        if (code.length() < 6) {
-            return code;
+        if (code.length() == 4) {
+            String yearPrefix = code.substring(0, 2);
+            String termPart = code.substring(2);
+
+            String fullYear = "20" + yearPrefix;
+
+            return switch (termPart) {
+                case "2" -> "Spring " + fullYear;
+                case "3" -> "Summer " + fullYear;
+                case "4" -> "Fall " + fullYear;
+                default -> code;
+            };
         }
 
-        String year = code.substring(0, 4);
-        String termPart = code.substring(4);
+        if (code.length() >= 6) {
+            String year = code.substring(0, 4);
+            String termPart = code.substring(4);
 
-        return switch (termPart) {
-            case "01" -> "Spring " + year;
-            case "05" -> "Summer " + year;
-            case "08" -> "Fall " + year;
-            default -> code;
-        };
+            return switch (termPart) {
+                case "01" -> "Spring " + year;
+                case "05" -> "Summer " + year;
+                case "08" -> "Fall " + year;
+                default -> code;
+            };
+        }
+
+        return code;
     }
 
     private JPanel createSummaryCard(String title, JLabel valueLabel) {

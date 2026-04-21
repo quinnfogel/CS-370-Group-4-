@@ -24,6 +24,18 @@ public class StudentDashboard extends JFrame {
     private RequestHistoryPanel requestHistoryPanel;
 
     public StudentDashboard() {
+        if (!isAuthorizedStudent()) {
+            JOptionPane.showMessageDialog(this,
+                    "You must be logged in as a student to access the Student Dashboard.",
+                    "Access Denied",
+                    JOptionPane.WARNING_MESSAGE);
+
+            Session.clearSession();
+            new login_page().setVisible(true);
+            dispose();
+            return;
+        }
+
         setTitle("CSUSM VetConnect");
         setSize(1280, 800);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -33,6 +45,12 @@ public class StudentDashboard extends JFrame {
         add(createHeader(), BorderLayout.NORTH);
         add(createSidebar(), BorderLayout.WEST);
         add(createContentPanel(), BorderLayout.CENTER);
+    }
+
+    private boolean isAuthorizedStudent() {
+        return Session.isLoggedIn()
+                && Session.getRole() == UserRole.STUDENT
+                && Session.isActive();
     }
 
     private JPanel createHeader() {
@@ -48,20 +66,21 @@ public class StudentDashboard extends JFrame {
         JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 8));
         rightPanel.setOpaque(false);
 
-        String firstName = Session.getFirstName() != null ? Session.getFirstName() : "";
-        String lastName = Session.getLastName() != null ? Session.getLastName() : "";
+        String firstName = Session.getFirstName() != null ? Session.getFirstName().trim() : "";
+        String lastName = Session.getLastName() != null ? Session.getLastName().trim() : "";
+
         String fullName = (firstName + " " + lastName).trim();
         if (fullName.isEmpty()) {
             fullName = "User";
         }
 
-        String role = Session.getRole() != null ? Session.getRole() : "Student";
+        String roleText = formatRole(Session.getRole());
 
         JLabel welcomeLabel = new JLabel("Welcome, " + fullName);
         welcomeLabel.setForeground(Color.WHITE);
         welcomeLabel.setFont(new Font("Segoe UI", Font.PLAIN, 15));
 
-        JLabel roleLabel = new JLabel("Role: " + role);
+        JLabel roleLabel = new JLabel("Role: " + roleText);
         roleLabel.setForeground(Color.WHITE);
         roleLabel.setFont(new Font("Segoe UI", Font.PLAIN, 15));
 
@@ -80,6 +99,15 @@ public class StudentDashboard extends JFrame {
         header.add(rightPanel, BorderLayout.EAST);
 
         return header;
+    }
+
+    private String formatRole(UserRole role) {
+        if (role == null) return "Student";
+
+        return switch (role) {
+            case STUDENT -> "Student";
+            case SCO -> "SCO";
+        };
     }
 
     private JPanel createSidebar() {
