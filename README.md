@@ -1,4 +1,5 @@
 VetConnect
+
 A desktop application that streamlines VA education benefit certification for student veterans and School Certifying Officials (SCOs). Built using Java (Swing) with a local SQLite database. Designed to replace manual, email-heavy workflows with a structured, trackable system.
 
 ---
