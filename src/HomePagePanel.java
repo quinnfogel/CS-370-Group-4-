@@ -109,12 +109,18 @@ public class HomePagePanel extends JPanel {
                 """;
 
         String latestRequestQuery = """
-                SELECT academic_term_code, status
-                FROM cert_request
-                WHERE student_id = ?
-                ORDER BY last_updated_date DESC, cert_id DESC
-                LIMIT 1
-                """;
+        SELECT academic_term_code, status
+        FROM cert_request
+        WHERE student_id = ?
+        ORDER BY
+            CASE
+                WHEN UPPER(REPLACE(status, ' ', '_')) IN ('CANCELLED', 'CANCELED') THEN 1
+                ELSE 0
+            END,
+            datetime(COALESCE(last_updated_date, submission_date)) DESC,
+            cert_id DESC
+        LIMIT 1
+        """;
 
         try (Connection conn = DriverManager.getConnection(DB_URL)) {
             int studentId = 0;

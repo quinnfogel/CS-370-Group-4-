@@ -11,6 +11,7 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 
+
 public class RequestHistoryPanel extends JPanel {
 
     private static final String DB_URL = "jdbc:sqlite:database.sqlite";
@@ -266,6 +267,7 @@ public class RequestHistoryPanel extends JPanel {
                     int certId = rs.getInt("cert_id");
                     int termCode = rs.getInt("academic_term_code");
                     BenefitType benefitType = parseBenefitType(rs.getString("benefit_type"));
+                    System.out.println("DB STATUS VALUE: [" + rs.getString("status") + "]");
                     RequestStatus status = parseRequestStatus(rs.getString("status"));
                     String submittedOn = rs.getString("submitted_on");
 
@@ -275,7 +277,7 @@ public class RequestHistoryPanel extends JPanel {
                             formatAcademicTerm(termCode),
                             formatBenefitType(benefitType),
                             formatStatus(status),
-                            submittedOn != null ? submittedOn : "-"
+                            formatDateTime(submittedOn)
                     });
                 }
             }
@@ -356,6 +358,12 @@ public class RequestHistoryPanel extends JPanel {
                 }
 
                 RequestStatus status = parseRequestStatus(rs.getString("status"));
+                if (status == RequestStatus.CANCELLED) {
+                    String approvedCancelMessage = "SCO has approved this certification cancellation.";
+                    certRequest.cancel();
+                    certRequest.setScoNote(approvedCancelMessage);
+                    return certRequest;
+                }
                 String scoNote = rs.getString("sco_note");
                 boolean cancelRequested = rs.getInt("cancel_requested") == 1;
 
@@ -491,7 +499,7 @@ public class RequestHistoryPanel extends JPanel {
             case SUBMITTED -> statusValue.setForeground(new Color(204, 153, 0));
             case ACTION_NEEDED -> statusValue.setForeground(new Color(178, 34, 34));
             case CERTIFIED -> statusValue.setForeground(new Color(34, 139, 34));
-            case CANCELLED -> statusValue.setForeground(new Color(120, 120, 120));
+            case CANCELLED -> statusValue.setForeground(new Color(178, 34, 34));
             default -> statusValue.setForeground(StudentDashboard.DARK_TEXT);
         }
     }
@@ -559,11 +567,18 @@ public class RequestHistoryPanel extends JPanel {
             return null;
         }
 
-        try {
-            return RequestStatus.valueOf(dbValue.trim().toUpperCase());
-        } catch (IllegalArgumentException ex) {
-            return null;
-        }
+        String normalized = dbValue.trim()
+                .toUpperCase()
+                .replace(" ", "_")
+                .replace("-", "_");
+
+        return switch (normalized) {
+            case "SUBMITTED", "PENDING", "IN_REVIEW", "APPROVED", "DRAFT" -> RequestStatus.SUBMITTED;
+            case "ACTION_NEEDED", "ERROR", "ERROR_FOUND" -> RequestStatus.ACTION_NEEDED;
+            case "CERTIFIED" -> RequestStatus.CERTIFIED;
+            case "CANCELLED", "CANCELED" -> RequestStatus.CANCELLED;
+            default -> null;
+        };
     }
 
     private String formatBenefitType(BenefitType benefitType) {
@@ -575,7 +590,7 @@ public class RequestHistoryPanel extends JPanel {
 
     private String formatStatus(RequestStatus status) {
         if (status == null) {
-            return "";
+            return "Unknown Status";
         }
 
         return switch (status) {
@@ -624,5 +639,14 @@ public class RequestHistoryPanel extends JPanel {
             return String.valueOf((long) value);
         }
         return String.valueOf(value);
+    }
+    private String formatDateTime(String value) {
+        if (value == null || value.isBlank()) {
+            return "-";
+        }
+
+        return value
+                .replace("T", " ")
+                .replaceAll("\\.\\d+$", "");
     }
 }

@@ -432,14 +432,15 @@ public class ViewRequestStatusPanel extends JPanel {
                 """;
 
         String requestQuery = """
-                SELECT cert_id,
-                       academic_term_code,
-                       status,
-                       last_updated_date
-                FROM cert_request
-                WHERE student_id = ?
-                ORDER BY last_updated_date DESC, cert_id DESC
-                """;
+        SELECT cert_id,
+               academic_term_code,
+               status,
+               last_updated_date
+        FROM cert_request
+        WHERE student_id = ?
+          AND UPPER(REPLACE(status, ' ', '_')) NOT IN ('CANCELLED', 'CANCELED')
+        ORDER BY last_updated_date DESC, cert_id DESC
+        """;
 
         try (Connection conn = getConnection()) {
             try (PreparedStatement ps = conn.prepareStatement(studentQuery)) {
@@ -773,11 +774,18 @@ public class ViewRequestStatusPanel extends JPanel {
             return null;
         }
 
-        try {
-            return RequestStatus.valueOf(dbValue.trim().toUpperCase());
-        } catch (IllegalArgumentException ex) {
-            return null;
-        }
+        String normalized = dbValue.trim()
+                .toUpperCase()
+                .replace(" ", "_")
+                .replace("-", "_");
+
+        return switch (normalized) {
+            case "SUBMITTED", "PENDING", "IN_REVIEW", "APPROVED", "DRAFT" -> RequestStatus.SUBMITTED;
+            case "ACTION_NEEDED", "ERROR", "ERROR_FOUND" -> RequestStatus.ACTION_NEEDED;
+            case "CERTIFIED" -> RequestStatus.CERTIFIED;
+            case "CANCELLED", "CANCELED" -> RequestStatus.CANCELLED;
+            default -> null;
+        };
     }
 
     private String formatStatus(RequestStatus status) {

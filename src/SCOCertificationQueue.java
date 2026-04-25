@@ -239,7 +239,7 @@ public class SCOCertificationQueue extends JPanel {
         formPanel.setBorder(new EmptyBorder(20, 0, 0, 0));
 
         statusComboBox = new JComboBox<>(new String[]{
-                "Submitted", "Action Needed", "Certified"
+                "Submitted", "Action Needed", "Certified", "Cancelled"
         });
 
         noteArea = new JTextArea(4, 30);
@@ -291,7 +291,16 @@ public class SCOCertificationQueue extends JPanel {
                 JOIN student s ON cr.student_id = s.student_id
                 JOIN user u ON s.user_id = u.user_id
                 WHERE cr.is_draft = 0
-                  AND cr.status IN ('SUBMITTED', 'Submitted')
+                AND (
+                    UPPER(REPLACE(cr.status, ' ', '_')) IN (
+                            'SUBMITTED',
+                            'PENDING',
+                            'IN_REVIEW',
+                            'APPROVED',
+                            'DRAFT'
+                            )
+                            OR COALESCE(cr.cancel_requested, 0) = 1
+                            )
                 ORDER BY COALESCE(cr.submission_date, cr.last_updated_date) DESC, cr.cert_id DESC
                 """;
 
@@ -502,14 +511,15 @@ public class SCOCertificationQueue extends JPanel {
             return;
         }
 
-        SCO currentSco = Session.getSCO();
-        if (currentSco == null) {
+        if (!Session.isLoggedIn() || Session.getRole() != UserRole.SCO) {
             JOptionPane.showMessageDialog(this,
                     "No active SCO session found.",
                     "Session Error",
                     JOptionPane.ERROR_MESSAGE);
             return;
         }
+
+        int empId = Session.getUserId();
 
         int certId = requestCertIds.get(selectedRow);
         String note = noteArea.getText().trim();
@@ -535,13 +545,15 @@ public class SCOCertificationQueue extends JPanel {
                     certRequest.submit();
                     certRequest.setScoNote(note);
                 } else if (selectedStatus == RequestStatus.ACTION_NEEDED) {
-                    currentSco.markRequestActionNeeded(certRequest, note.isBlank() ? "Needs follow-up from SCO." : note);
-                } else if (selectedStatus == RequestStatus.CERTIFIED) {
+                    certRequest.markActionNeeded(note.isBlank() ? "Needs follow-up from SCO." : note);                } else if (selectedStatus == RequestStatus.CERTIFIED) {
                     certRequest.resolveAllErrors();
-                    currentSco.certifyRequest(certRequest);
+                    certRequest.markCertified();
+                } else if (selectedStatus == RequestStatus.CANCELLED) {
+                    certRequest.cancel();
+                    certRequest.setScoNote(note.isBlank() ? "Certification cancelled by SCO." : note);
                 }
 
-                updateCertRequestRecord(conn, certRequest, currentSco.getEmpId());
+                updateCertRequestRecord(conn, certRequest, empId);
 
                 conn.commit();
 
@@ -578,14 +590,15 @@ public class SCOCertificationQueue extends JPanel {
             return;
         }
 
-        SCO currentSco = Session.getSCO();
-        if (currentSco == null) {
+        if (!Session.isLoggedIn() || Session.getRole() != UserRole.SCO) {
             JOptionPane.showMessageDialog(this,
                     "No active SCO session found.",
                     "Session Error",
                     JOptionPane.ERROR_MESSAGE);
             return;
         }
+
+        int empId = Session.getUserId();
 
         int certId = requestCertIds.get(selectedRow);
         String note = noteArea.getText().trim();
@@ -607,9 +620,9 @@ public class SCOCertificationQueue extends JPanel {
 
                 CertError certError = new CertError(generateTempErrorId(), certId, note);
                 certRequest.addError(certError);
-                currentSco.markRequestActionNeeded(certRequest, note);
+                certRequest.markActionNeeded(note);
 
-                updateCertRequestRecord(conn, certRequest, currentSco.getEmpId());
+                updateCertRequestRecord(conn, certRequest, empId);
                 insertCertError(conn, certError);
 
                 conn.commit();
@@ -640,15 +653,16 @@ public class SCOCertificationQueue extends JPanel {
     private void updateCertRequestRecord(Connection conn, CertRequest certRequest, int empId) throws Exception {
         String sql = """
                 UPDATE cert_request
-                SET status = ?,
-                    sco_note = ?,
-                    reviewed_by_emp_id = ?,
-                    last_updated_date = CURRENT_TIMESTAMP
-                WHERE cert_id = ?
+                                 SET status = ?,
+                                     sco_note = ?,
+                                     reviewed_by_emp_id = ?,
+                                     cancel_requested = 0,
+                                     last_updated_date = CURRENT_TIMESTAMP
+                                 WHERE cert_id = ?
                 """;
 
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setString(1, certRequest.getStatus().name());
+            pstmt.setString(1, toDatabaseStatus(certRequest.getStatus()));
             pstmt.setString(2, certRequest.getScoNote() == null || certRequest.getScoNote().isBlank() ? null : certRequest.getScoNote());
             pstmt.setInt(3, empId);
             pstmt.setInt(4, certRequest.getCertId());
@@ -658,13 +672,14 @@ public class SCOCertificationQueue extends JPanel {
 
     private void insertCertError(Connection conn, CertError certError) throws Exception {
         String sql = """
-                INSERT INTO cert_error (cert_id, error_message, is_resolved)
-                VALUES (?, ?, 0)
-                """;
+            INSERT INTO cert_error (cert_id, error_type, error_message, is_resolved)
+            VALUES (?, ?, ?, 0)
+            """;
 
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setInt(1, certError.getCertId());
-            pstmt.setString(2, certError.getErrorMessage());
+            pstmt.setString(2, "Missing Information");
+            pstmt.setString(3, certError.getErrorMessage());
             pstmt.executeUpdate();
         }
     }
@@ -723,13 +738,18 @@ public class SCOCertificationQueue extends JPanel {
             return null;
         }
 
-        String normalized = dbValue.trim().toUpperCase().replace(" ", "_");
+        String normalized = dbValue.trim()
+                .toUpperCase()
+                .replace(" ", "_")
+                .replace("-", "_");
 
-        try {
-            return RequestStatus.valueOf(normalized);
-        } catch (IllegalArgumentException ex) {
-            return null;
-        }
+        return switch (normalized) {
+            case "SUBMITTED", "PENDING", "IN_REVIEW", "APPROVED", "DRAFT" -> RequestStatus.SUBMITTED;
+            case "ACTION_NEEDED", "ERROR", "ERROR_FOUND" -> RequestStatus.ACTION_NEEDED;
+            case "CERTIFIED" -> RequestStatus.CERTIFIED;
+            case "CANCELLED", "CANCELED" -> RequestStatus.CANCELLED;
+            default -> null;
+        };
     }
 
     private String formatStatus(RequestStatus status) {
@@ -897,5 +917,24 @@ public class SCOCertificationQueue extends JPanel {
             this.certRequest = certRequest;
             this.studentName = studentName;
         }
+    }
+    private String toDatabaseStatus(RequestStatus status) {
+        if (status == null) {
+            return "Draft";
+        }
+
+        String statusText = status.toString().trim();
+
+        if (statusText.equalsIgnoreCase("Cancellation Pending")) {
+            return "Cancelled";
+        }
+
+        return switch (status) {
+            case SUBMITTED -> "Submitted";
+            case ACTION_NEEDED -> "Action Needed";
+            case CERTIFIED -> "Certified";
+            case CANCELLED -> "Cancelled";
+            default -> "Draft";
+        };
     }
 }

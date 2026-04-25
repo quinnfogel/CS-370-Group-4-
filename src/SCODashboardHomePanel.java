@@ -274,14 +274,44 @@ public class SCODashboardHomePanel extends JPanel {
                 SELECT COUNT(*)
                 FROM cert_request
                 WHERE is_draft = 0
-                  AND status IN (?, ?)
+                    AND (
+                        UPPER(REPLACE(status, ' ', '_')) = ?
+                        OR UPPER(REPLACE(status, ' ', '_')) IN (?, ?, ?, ?)
+                        )
                 """;
 
         try (Connection conn = DriverManager.getConnection(DB_URL);
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            String normalized = status.name(); // SUBMITTED, ACTION_NEEDED, etc.
 
-            pstmt.setString(1, status.name());
-            pstmt.setString(2, formatLegacyStatus(status));
+            pstmt.setString(1, normalized);
+
+            switch (status) {
+                case SUBMITTED -> {
+                    pstmt.setString(2, "PENDING");
+                    pstmt.setString(3, "IN_REVIEW");
+                    pstmt.setString(4, "APPROVED");
+                    pstmt.setString(5, "DRAFT");
+                }
+                case ACTION_NEEDED -> {
+                    pstmt.setString(2, "ERROR");
+                    pstmt.setString(3, "ERROR_FOUND");
+                    pstmt.setString(4, "ACTION_NEEDED");
+                    pstmt.setString(5, "ACTIONNEEDED");
+                }
+                case CERTIFIED -> {
+                    pstmt.setString(2, "CERTIFIED");
+                    pstmt.setString(3, "CERTIFIED_SUBMITTED");
+                    pstmt.setString(4, "APPROVED");
+                    pstmt.setString(5, "DONE");
+                }
+                case CANCELLED -> {
+                    pstmt.setString(2, "CANCELLED");
+                    pstmt.setString(3, "CANCELED");
+                    pstmt.setString(4, "VOID");
+                    pstmt.setString(5, "DELETED");
+                }
+            }
 
             try (ResultSet rs = pstmt.executeQuery()) {
                 if (rs.next()) {

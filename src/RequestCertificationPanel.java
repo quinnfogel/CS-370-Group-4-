@@ -583,7 +583,7 @@ public class RequestCertificationPanel extends JPanel {
                 saveStudentBenefitType(conn, student);
                 int certId = saveCertRequest(conn, student, certRequest);
                 saveCourses(conn, certId, certRequest.getCourses());
-                saveMonthlyAllowance(conn, certId, certRequest);
+                //saveMonthlyAllowance(conn, certId, certRequest);
 
                 conn.commit();
 
@@ -659,7 +659,8 @@ public class RequestCertificationPanel extends JPanel {
         try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setInt(1, student.getStudentId());
             ps.setInt(2, certRequest.getAcademicTermCode());
-            ps.setString(3, certRequest.getStatus().name());
+            //ps.setString(3, certRequest.getStatus().name());
+            ps.setString(3, toDatabaseStatus(certRequest.getStatus()));
             ps.setString(4, certRequest.getSubmissionDate() != null ? certRequest.getSubmissionDate().toString() : null);
             ps.setString(5, certRequest.getLastUpdatedDate() != null ? certRequest.getLastUpdatedDate().toString() : null);
             ps.setDouble(6, certRequest.getTotalUnits());
@@ -749,5 +750,18 @@ public class RequestCertificationPanel extends JPanel {
         totalUnitsValue.setText("0");
         trainingTimeValue.setText("N/A");
         allowanceValue.setText("$0.00 / month");
+    }
+    private String toDatabaseStatus(RequestStatus status) {
+        if (status == null) {
+            return "Draft";
+        }
+
+        return switch (status) {
+            case SUBMITTED -> "Submitted";
+            case ACTION_NEEDED -> "Action Needed";
+            case CERTIFIED -> "Certified";
+            case CANCELLED -> "Cancelled";
+            default -> "N/A";
+        };
     }
 }

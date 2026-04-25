@@ -113,6 +113,13 @@ public class CertificationErrorsPanel extends JPanel {
         errorsTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         errorsTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
 
+        errorsTable.getColumnModel().getColumn(0).setPreferredWidth(90);  // Request ID
+        errorsTable.getColumnModel().getColumn(1).setPreferredWidth(130); // Student Name
+        errorsTable.getColumnModel().getColumn(2).setPreferredWidth(90);  // Term
+        errorsTable.getColumnModel().getColumn(3).setPreferredWidth(170); // Benefit Type
+        errorsTable.getColumnModel().getColumn(4).setPreferredWidth(110); // Status
+        errorsTable.getColumnModel().getColumn(5).setPreferredWidth(180); // Issue
+
         errorsTable.getSelectionModel().addListSelectionListener(new ListSelectionListener() {
             @Override
             public void valueChanged(ListSelectionEvent e) {
@@ -127,7 +134,7 @@ public class CertificationErrorsPanel extends JPanel {
 
         JScrollPane scrollPane = new JScrollPane(errorsTable);
         scrollPane.setBorder(new LineBorder(SCODashboard.BORDER, 1, true));
-        scrollPane.setPreferredSize(new Dimension(1100, 180));
+        scrollPane.setPreferredSize(new Dimension(900, 180));
         scrollPane.getViewport().setBackground(Color.WHITE);
         scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
 
@@ -219,9 +226,17 @@ public class CertificationErrorsPanel extends JPanel {
         coursesTable.setFillsViewportHeight(true);
         coursesTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
 
+        coursesTable.getColumnModel().getColumn(0).setPreferredWidth(105);
+        coursesTable.getColumnModel().getColumn(1).setPreferredWidth(95);
+        coursesTable.getColumnModel().getColumn(2).setPreferredWidth(105);
+        coursesTable.getColumnModel().getColumn(3).setPreferredWidth(180);
+        coursesTable.getColumnModel().getColumn(4).setPreferredWidth(70);
+        coursesTable.getColumnModel().getColumn(5).setPreferredWidth(55);
+        coursesTable.getColumnModel().getColumn(6).setPreferredWidth(115);
+
         JScrollPane scrollPane = new JScrollPane(coursesTable);
         scrollPane.setBorder(new LineBorder(SCODashboard.BORDER, 1, true));
-        scrollPane.setPreferredSize(new Dimension(1100, 180));
+        scrollPane.setPreferredSize(new Dimension(900, 180));
         scrollPane.getViewport().setBackground(Color.WHITE);
         scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
 
@@ -290,21 +305,27 @@ public class CertificationErrorsPanel extends JPanel {
 
         String sql = """
             SELECT
-                ce.error_id,
+                COALESCE(ce.error_id, -cr.cert_id) AS error_id,
                 cr.cert_id,
                 u.first_name || ' ' || u.last_name AS student_name,
                 cr.academic_term_code,
                 s.benefit_type,
                 cr.status,
-                ce.error_message
-            FROM cert_error ce
-            JOIN cert_request cr ON ce.cert_id = cr.cert_id
+                COALESCE(ce.error_message, cr.sco_note, 'Needs follow-up from SCO.') AS error_message
+            FROM cert_request cr
             JOIN student s ON cr.student_id = s.student_id
             JOIN user u ON s.user_id = u.user_id
-            WHERE ce.is_resolved = 0
-              AND cr.status IN ('ACTION_NEEDED', 'Action Needed')
-            ORDER BY ce.error_id DESC
-            """;
+            LEFT JOIN cert_error ce
+            ON ce.cert_id = cr.cert_id
+            AND ce.is_resolved = 0
+            WHERE cr.is_draft = 0
+            AND UPPER(REPLACE(cr.status, ' ', '_')) IN (
+                'ACTION_NEEDED',
+                'ERROR',
+                'ERROR_FOUND'
+                )
+            ORDER BY cr.last_updated_date DESC, cr.cert_id DESC
+                """;
 
         try (Connection conn = DriverManager.getConnection(DB_URL);
              PreparedStatement pstmt = conn.prepareStatement(sql);
@@ -315,6 +336,7 @@ public class CertificationErrorsPanel extends JPanel {
                 int certId = rs.getInt("cert_id");
                 BenefitType benefitType = parseBenefitType(rs.getString("benefit_type"));
                 RequestStatus status = parseRequestStatus(rs.getString("status"));
+
 
                 errorIds.add(errorId);
                 requestCertIds.add(certId);
@@ -390,25 +412,25 @@ public class CertificationErrorsPanel extends JPanel {
 
     private LoadedErrorRequest loadErrorRequestObject(Connection conn, int certId, int errorId) throws Exception {
         String sql = """
-                SELECT
-                    cr.cert_id,
-                    cr.academic_term_code,
-                    cr.status,
-                    cr.sco_note,
-                    s.benefit_type,
-                    u.first_name || ' ' || u.last_name AS student_name,
-                    ce.error_message
-                FROM cert_request cr
-                JOIN student s ON cr.student_id = s.student_id
-                JOIN user u ON s.user_id = u.user_id
-                JOIN cert_error ce ON ce.cert_id = cr.cert_id
-                WHERE cr.cert_id = ?
-                  AND ce.error_id = ?
-                """;
+            SELECT
+                cr.cert_id,
+                cr.academic_term_code,
+                cr.status,
+                cr.sco_note,
+                s.benefit_type,
+                u.first_name || ' ' || u.last_name AS student_name,
+                COALESCE(ce.error_message, cr.sco_note, 'Needs follow-up from SCO.') AS error_message
+            FROM cert_request cr
+            JOIN student s ON cr.student_id = s.student_id
+            JOIN user u ON s.user_id = u.user_id
+            LEFT JOIN cert_error ce
+                ON ce.cert_id = cr.cert_id
+               AND ce.is_resolved = 0
+            WHERE cr.cert_id = ?
+            """;
 
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setInt(1, certId);
-            pstmt.setInt(2, errorId);
 
             try (ResultSet rs = pstmt.executeQuery()) {
                 if (!rs.next()) {
@@ -432,19 +454,38 @@ public class CertificationErrorsPanel extends JPanel {
                 }
 
                 String errorMessage = rs.getString("error_message");
-                CertError certError = new CertError(errorId, certId, errorMessage);
-                certRequest.addError(certError);
-
                 String scoNote = rs.getString("sco_note");
-                if (scoNote != null && !scoNote.isBlank()) {
+                RequestStatus status = parseRequestStatus(rs.getString("status"));
+
+                if (status == RequestStatus.SUBMITTED) {
+                    certRequest.submit();
+                } else if (status == RequestStatus.ACTION_NEEDED) {
+                    certRequest.submit();
+                    certRequest.markActionNeeded(errorMessage);
+                } else if (status == RequestStatus.CERTIFIED) {
+                    certRequest.submit();
+                    certRequest.markCertified();
+                } else if (status == RequestStatus.CANCELLED) {
+                    certRequest.cancel();
+                }
+
+                if (errorId > 0 && errorMessage != null && !errorMessage.isBlank()) {
+                    CertError certError = new CertError(errorId, certId, errorMessage);
+                    certRequest.addError(certError);
+                }
+
+                if (scoNote != null && !scoNote.isBlank() && status != RequestStatus.ACTION_NEEDED) {
                     certRequest.setScoNote(scoNote);
                 }
 
-                return new LoadedErrorRequest(certRequest, rs.getString("student_name"), errorMessage);
+                return new LoadedErrorRequest(
+                        certRequest,
+                        rs.getString("student_name"),
+                        errorMessage
+                );
             }
         }
     }
-
     private List<Course> loadCourseObjects(Connection conn, int certId) throws Exception {
         String sql = """
                 SELECT
@@ -511,14 +552,15 @@ public class CertificationErrorsPanel extends JPanel {
             return;
         }
 
-        SCO currentSco = Session.getSCO();
-        if (currentSco == null) {
+        if (!Session.isLoggedIn() || Session.getRole() != UserRole.SCO) {
             JOptionPane.showMessageDialog(this,
                     "No active SCO session found.",
                     "Session Error",
                     JOptionPane.ERROR_MESSAGE);
             return;
         }
+
+        int empId = Session.getUserId();
 
         int certId = requestCertIds.get(selectedRow);
         int errorId = errorIds.get(selectedRow);
@@ -548,13 +590,13 @@ public class CertificationErrorsPanel extends JPanel {
                     certRequest.submit();
                     certRequest.setScoNote(note);
                 } else if (selectedStatus == RequestStatus.ACTION_NEEDED) {
-                    currentSco.markRequestActionNeeded(certRequest, note.isBlank() ? loaded.errorNote : note);
+                    certRequest.markActionNeeded(note.isBlank() ? loaded.errorNote : note);
                 } else if (selectedStatus == RequestStatus.CERTIFIED) {
                     certRequest.resolveAllErrors();
-                    currentSco.certifyRequest(certRequest);
+                    certRequest.markCertified();
                 }
 
-                updateCertRequestRecord(conn, certRequest, currentSco.getEmpId());
+                updateCertRequestRecord(conn, certRequest, empId);
 
                 if (selectedStatus != RequestStatus.ACTION_NEEDED) {
                     markErrorResolved(conn, errorId);
@@ -595,14 +637,15 @@ public class CertificationErrorsPanel extends JPanel {
             return;
         }
 
-        SCO currentSco = Session.getSCO();
-        if (currentSco == null) {
+        if (!Session.isLoggedIn() || Session.getRole() != UserRole.SCO) {
             JOptionPane.showMessageDialog(this,
                     "No active SCO session found.",
                     "Session Error",
                     JOptionPane.ERROR_MESSAGE);
             return;
         }
+
+        int empId = Session.getUserId();
 
         int certId = requestCertIds.get(selectedRow);
         int errorId = errorIds.get(selectedRow);
@@ -622,7 +665,7 @@ public class CertificationErrorsPanel extends JPanel {
                 certRequest.submit();
                 certRequest.setScoNote(note);
 
-                updateCertRequestRecord(conn, certRequest, currentSco.getEmpId());
+                updateCertRequestRecord(conn, certRequest, empId);
                 markErrorResolved(conn, errorId);
 
                 conn.commit();
@@ -661,7 +704,7 @@ public class CertificationErrorsPanel extends JPanel {
                 """;
 
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setString(1, certRequest.getStatus().name());
+            pstmt.setString(1, toDatabaseStatus(certRequest.getStatus()));
             pstmt.setString(2, certRequest.getScoNote() == null || certRequest.getScoNote().isBlank() ? null : certRequest.getScoNote());
             pstmt.setInt(3, empId);
             pstmt.setInt(4, certRequest.getCertId());
@@ -670,11 +713,15 @@ public class CertificationErrorsPanel extends JPanel {
     }
 
     private void markErrorResolved(Connection conn, int errorId) throws Exception {
+        if (errorId <= 0) {
+            return;
+        }
+
         String sql = """
-                UPDATE cert_error
-                SET is_resolved = 1
-                WHERE error_id = ?
-                """;
+            UPDATE cert_error
+            SET is_resolved = 1
+            WHERE error_id = ?
+            """;
 
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setInt(1, errorId);
@@ -730,13 +777,18 @@ public class CertificationErrorsPanel extends JPanel {
             return null;
         }
 
-        String normalized = dbValue.trim().toUpperCase().replace(" ", "_");
+        String normalized = dbValue.trim()
+                .toUpperCase()
+                .replace(" ", "_")
+                .replace("-", "_");
 
-        try {
-            return RequestStatus.valueOf(normalized);
-        } catch (IllegalArgumentException ex) {
-            return null;
-        }
+        return switch (normalized) {
+            case "SUBMITTED", "PENDING", "IN_REVIEW", "DRAFT" -> RequestStatus.SUBMITTED;
+            case "ACTION_NEEDED", "ERROR", "ERROR_FOUND" -> RequestStatus.ACTION_NEEDED;
+            case "CERTIFIED", "APPROVED" -> RequestStatus.CERTIFIED;
+            case "CANCELLED", "CANCELED", "CANCELLATION_PENDING" -> RequestStatus.CANCELLED;
+            default -> null;
+        };
     }
 
     private String formatStatus(RequestStatus status) {
@@ -749,7 +801,7 @@ public class CertificationErrorsPanel extends JPanel {
             case ACTION_NEEDED -> "Action Needed";
             case CERTIFIED -> "Certified";
             case CANCELLED -> "Cancelled";
-            default -> "N/A";
+            default -> "";
         };
     }
 
@@ -877,5 +929,18 @@ public class CertificationErrorsPanel extends JPanel {
             this.studentName = studentName;
             this.errorNote = errorNote;
         }
+    }
+    private String toDatabaseStatus(RequestStatus status) {
+        if (status == null) {
+            return "Draft";
+        }
+
+        return switch (status) {
+            case SUBMITTED -> "Submitted";
+            case ACTION_NEEDED -> "Action Needed";
+            case CERTIFIED -> "Certified";
+            case CANCELLED -> "Cancelled";
+            default -> "";
+        };
     }
 }

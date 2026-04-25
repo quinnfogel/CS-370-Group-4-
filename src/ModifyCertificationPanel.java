@@ -12,6 +12,9 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.List;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+
 
 public class ModifyCertificationPanel extends JPanel {
 
@@ -1190,7 +1193,7 @@ public class ModifyCertificationPanel extends JPanel {
                 saveCourses(conn, currentCertId, updatedCourses);
                 updateCertRequest(conn, certRequest, currentCertId);
                 resolveErrorsForRequest(conn, currentCertId);
-                saveMonthlyAllowance(conn, currentCertId, certRequest);
+                //saveMonthlyAllowance(conn, currentCertId, certRequest);
 
                 conn.commit();
 
@@ -1222,7 +1225,7 @@ public class ModifyCertificationPanel extends JPanel {
         } catch (Exception ex) {
             ex.printStackTrace();
             JOptionPane.showMessageDialog(this,
-                    "Failed to save certification changes.",
+                    "Failed to save certification changes.\n" + ex.getMessage(),
                     "Database Error",
                     JOptionPane.ERROR_MESSAGE);
         }
@@ -1271,8 +1274,8 @@ public class ModifyCertificationPanel extends JPanel {
         String sql = """
                 UPDATE cert_request
                 SET status = ?,
-                    submission_date = CURRENT_TIMESTAMP,
-                    last_updated_date = CURRENT_TIMESTAMP,
+                    submission_date = ?,
+                    last_updated_date = ?,
                     total_units = ?,
                     unit_load_category = ?,
                     is_draft = 0,
@@ -1282,10 +1285,14 @@ public class ModifyCertificationPanel extends JPanel {
                 """;
 
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setString(1, certRequest.getStatus().name());
-            pstmt.setDouble(2, certRequest.getTotalUnits());
-            pstmt.setString(3, certRequest.getUnitLoadCategory());
-            pstmt.setInt(4, certId);
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+            String now = LocalDateTime.now().format(formatter);
+            pstmt.setString(1, toDatabaseStatus(certRequest.getStatus()));
+            pstmt.setString(2, now);
+            pstmt.setString(3, now);
+            pstmt.setDouble(4, certRequest.getTotalUnits());
+            pstmt.setString(5, certRequest.getUnitLoadCategory());
+            pstmt.setInt(6, certId);
             pstmt.executeUpdate();
         }
     }
@@ -1542,5 +1549,18 @@ public class ModifyCertificationPanel extends JPanel {
         public String toString() {
             return requestLabel + " - " + termLabel + " - " + statusLabel;
         }
+    }
+    private String toDatabaseStatus(RequestStatus status) {
+        if (status == null) {
+            return "Draft";
+        }
+
+        return switch (status) {
+            case SUBMITTED -> "Submitted";
+            case ACTION_NEEDED -> "Action Needed";
+            case CERTIFIED -> "Certified";
+            case CANCELLED -> "Cancelled";
+            default -> "N/A";
+        };
     }
 }

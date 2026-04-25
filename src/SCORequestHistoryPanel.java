@@ -140,6 +140,14 @@ public class SCORequestHistoryPanel extends JPanel {
         historyTable.setGridColor(SCODashboard.BORDER);
         historyTable.setFillsViewportHeight(true);
         historyTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        historyTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
+
+        historyTable.getColumnModel().getColumn(0).setPreferredWidth(90);
+        historyTable.getColumnModel().getColumn(1).setPreferredWidth(140);
+        historyTable.getColumnModel().getColumn(2).setPreferredWidth(95);
+        historyTable.getColumnModel().getColumn(3).setPreferredWidth(180);
+        historyTable.getColumnModel().getColumn(4).setPreferredWidth(100);
+        historyTable.getColumnModel().getColumn(5).setPreferredWidth(120);
 
         historyTable.getSelectionModel().addListSelectionListener((ListSelectionEvent e) -> {
             if (!e.getValueIsAdjusting()) {
@@ -152,7 +160,7 @@ public class SCORequestHistoryPanel extends JPanel {
 
         JScrollPane scrollPane = new JScrollPane(historyTable);
         scrollPane.setBorder(new LineBorder(SCODashboard.BORDER, 1, true));
-        scrollPane.setPreferredSize(new Dimension(980, 220));
+        scrollPane.setPreferredSize(new Dimension(900, 220));
 
         JPanel content = new JPanel(new BorderLayout());
         content.setOpaque(false);
@@ -225,7 +233,7 @@ public class SCORequestHistoryPanel extends JPanel {
 
         JScrollPane messageScroll = new JScrollPane(scoMessageArea);
         messageScroll.setBorder(new LineBorder(SCODashboard.BORDER, 1, true));
-        messageScroll.setPreferredSize(new Dimension(980, 105));
+        messageScroll.setPreferredSize(new Dimension(900, 105));
 
         JPanel content = new JPanel(new BorderLayout());
         content.setOpaque(false);
@@ -272,17 +280,17 @@ public class SCORequestHistoryPanel extends JPanel {
         coursesTable.setFillsViewportHeight(true);
         coursesTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
 
-        coursesTable.getColumnModel().getColumn(0).setPreferredWidth(120);
-        coursesTable.getColumnModel().getColumn(1).setPreferredWidth(120);
-        coursesTable.getColumnModel().getColumn(2).setPreferredWidth(120);
-        coursesTable.getColumnModel().getColumn(3).setPreferredWidth(420);
-        coursesTable.getColumnModel().getColumn(4).setPreferredWidth(110);
-        coursesTable.getColumnModel().getColumn(5).setPreferredWidth(90);
-        coursesTable.getColumnModel().getColumn(6).setPreferredWidth(180);
+        coursesTable.getColumnModel().getColumn(0).setPreferredWidth(105);
+        coursesTable.getColumnModel().getColumn(1).setPreferredWidth(95);
+        coursesTable.getColumnModel().getColumn(2).setPreferredWidth(105);
+        coursesTable.getColumnModel().getColumn(3).setPreferredWidth(180);
+        coursesTable.getColumnModel().getColumn(4).setPreferredWidth(70);
+        coursesTable.getColumnModel().getColumn(5).setPreferredWidth(55);
+        coursesTable.getColumnModel().getColumn(6).setPreferredWidth(115);
 
         JScrollPane scrollPane = new JScrollPane(coursesTable);
         scrollPane.setBorder(new LineBorder(SCODashboard.BORDER, 1, true));
-        scrollPane.setPreferredSize(new Dimension(1100, 190));
+        scrollPane.setPreferredSize(new Dimension(900, 190));
         scrollPane.getViewport().setBackground(Color.WHITE);
         scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
 
@@ -307,12 +315,18 @@ public class SCORequestHistoryPanel extends JPanel {
         semesterComboBox.addItem("All Semesters");
 
         String sql = """
-                SELECT DISTINCT academic_term_code
-                FROM cert_request
-                WHERE is_draft = 0
-                  AND status IN ('CERTIFIED', 'Certified')
-                ORDER BY academic_term_code DESC
-                """;
+    SELECT DISTINCT academic_term_code
+    FROM cert_request
+    WHERE is_draft = 0
+      AND UPPER(REPLACE(status, ' ', '_')) IN (
+          'CERTIFIED',
+          'CANCELLED',
+          'CANCELED',
+          'APPROVED',
+          'CANCELLATION_PENDING'
+      )
+    ORDER BY academic_term_code DESC
+    """;
 
         try (Connection conn = getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql);
@@ -364,7 +378,13 @@ public class SCORequestHistoryPanel extends JPanel {
                 JOIN student s ON cr.student_id = s.student_id
                 JOIN user u ON s.user_id = u.user_id
                 WHERE cr.is_draft = 0
-                  AND cr.status IN ('CERTIFIED', 'Certified')
+                  AND UPPER(REPLACE(cr.status, ' ', '_')) IN (
+                      'CERTIFIED',
+                      'CANCELLED',
+                      'CANCELED',
+                      'APPROVED',
+                      'CANCELLATION_PENDING'
+                  )
                 """);
 
         String selectedSemester = semesterComboBox.getSelectedItem() != null
@@ -433,12 +453,15 @@ public class SCORequestHistoryPanel extends JPanel {
             studentNameValue.setText(loaded.studentName);
             termValue.setText(formatTerm(certRequest.getAcademicTermCode()));
             benefitTypeValue.setText(certRequest.getBenefitType().getDisplayName());
-            statusValue.setText(formatStatus(certRequest.getStatus()));
             totalClassesValue.setText(String.valueOf(certRequest.getCourses().size()));
             totalUnitsValue.setText(formatUnits(certRequest.getTotalUnits()));
             trainingTimeValue.setText(formatTrainingTime(certRequest.getUnitLoadCategory()));
             allowanceValue.setText(certRequest.getFormattedEstimatedMonthlyAllowance());
-            applyStatusColor(certRequest.getStatus());
+            RequestStatus rawStatus = parseRequestStatus(loaded.rawStatus);
+
+            statusValue.setText(formatStatus(rawStatus));
+            applyStatusColor(rawStatus);
+
 
             String note = certRequest.getScoNote();
             scoMessageArea.setText(note == null || note.isBlank()
@@ -519,8 +542,7 @@ public class SCORequestHistoryPanel extends JPanel {
                     certRequest.setScoNote("Student requested cancellation. Awaiting SCO approval.");
                 }
 
-                return new LoadedRequest(certRequest, rs.getString("student_name"));
-            }
+                return new LoadedRequest(certRequest, rs.getString("student_name"), rs.getString("status"));            }
         }
     }
 
@@ -609,13 +631,18 @@ public class SCORequestHistoryPanel extends JPanel {
             return null;
         }
 
-        String normalized = dbValue.trim().toUpperCase().replace(" ", "_");
+        String normalized = dbValue.trim()
+                .toUpperCase()
+                .replace(" ", "_")
+                .replace("-", "_");
 
-        try {
-            return RequestStatus.valueOf(normalized);
-        } catch (IllegalArgumentException ex) {
-            return null;
-        }
+        return switch (normalized) {
+            case "SUBMITTED", "PENDING", "IN_REVIEW", "DRAFT" -> RequestStatus.SUBMITTED;
+            case "ACTION_NEEDED", "ERROR", "ERROR_FOUND" -> RequestStatus.ACTION_NEEDED;
+            case "CERTIFIED", "APPROVED" -> RequestStatus.CERTIFIED;
+            case "CANCELLED", "CANCELED", "CANCELLATION_PENDING" -> RequestStatus.CANCELLED;
+            default -> null;
+        };
     }
 
     private void applyStatusColor(RequestStatus status) {
@@ -628,7 +655,7 @@ public class SCORequestHistoryPanel extends JPanel {
             case CERTIFIED -> statusValue.setForeground(new Color(34, 139, 34));
             case ACTION_NEEDED -> statusValue.setForeground(new Color(178, 34, 34));
             case SUBMITTED -> statusValue.setForeground(new Color(40, 90, 180));
-            case CANCELLED -> statusValue.setForeground(new Color(120, 120, 120));
+            case CANCELLED -> statusValue.setForeground(new Color(178, 34, 34));
             default -> statusValue.setForeground(SCODashboard.DARK_TEXT);
         }
     }
@@ -754,10 +781,12 @@ public class SCORequestHistoryPanel extends JPanel {
     private static class LoadedRequest {
         private final CertRequest certRequest;
         private final String studentName;
+        private final String rawStatus;
 
-        private LoadedRequest(CertRequest certRequest, String studentName) {
+        private LoadedRequest(CertRequest certRequest, String studentName, String rawStatus) {
             this.certRequest = certRequest;
             this.studentName = studentName;
+            this.rawStatus = rawStatus;
         }
     }
 }
