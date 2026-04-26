@@ -6,11 +6,8 @@ import javax.swing.event.ListSelectionEvent;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.sql.*;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
-
 
 public class RequestHistoryPanel extends JPanel {
 
@@ -255,6 +252,7 @@ public class RequestHistoryPanel extends JPanel {
                         "FROM cert_request cr " +
                         "JOIN student s ON cr.student_id = s.student_id " +
                         "WHERE s.user_id = ? " +
+                        "  AND UPPER(TRIM(cr.status)) IN ('APPROVED', 'CERTIFIED', 'CANCELLED', 'CANCELED') " +
                         "ORDER BY datetime(COALESCE(cr.submission_date, cr.last_updated_date)) DESC, cr.cert_id DESC";
 
         try (Connection conn = getConnection();
@@ -267,7 +265,6 @@ public class RequestHistoryPanel extends JPanel {
                     int certId = rs.getInt("cert_id");
                     int termCode = rs.getInt("academic_term_code");
                     BenefitType benefitType = parseBenefitType(rs.getString("benefit_type"));
-                    System.out.println("DB STATUS VALUE: [" + rs.getString("status") + "]");
                     RequestStatus status = parseRequestStatus(rs.getString("status"));
                     String submittedOn = rs.getString("submitted_on");
 
@@ -364,6 +361,7 @@ public class RequestHistoryPanel extends JPanel {
                     certRequest.setScoNote(approvedCancelMessage);
                     return certRequest;
                 }
+
                 String scoNote = rs.getString("sco_note");
                 boolean cancelRequested = rs.getInt("cancel_requested") == 1;
 
@@ -573,9 +571,9 @@ public class RequestHistoryPanel extends JPanel {
                 .replace("-", "_");
 
         return switch (normalized) {
-            case "SUBMITTED", "PENDING", "IN_REVIEW", "APPROVED", "DRAFT" -> RequestStatus.SUBMITTED;
+            case "SUBMITTED", "PENDING", "IN_REVIEW", "DRAFT" -> RequestStatus.SUBMITTED;
             case "ACTION_NEEDED", "ERROR", "ERROR_FOUND" -> RequestStatus.ACTION_NEEDED;
-            case "CERTIFIED" -> RequestStatus.CERTIFIED;
+            case "APPROVED", "CERTIFIED" -> RequestStatus.CERTIFIED;
             case "CANCELLED", "CANCELED" -> RequestStatus.CANCELLED;
             default -> null;
         };
@@ -640,6 +638,7 @@ public class RequestHistoryPanel extends JPanel {
         }
         return String.valueOf(value);
     }
+
     private String formatDateTime(String value) {
         if (value == null || value.isBlank()) {
             return "-";
