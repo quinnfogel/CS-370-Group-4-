@@ -26,7 +26,7 @@ public class signup_page extends JFrame {
     private JTextField FirstNameForm;
 
     private static final String DB_URL = "jdbc:sqlite:database.sqlite";
-    private static final String DEFAULT_BENEFIT_TYPE = "CH33";
+    private static final String DEFAULT_BENEFIT_TYPE = "N/A";
 
     public signup_page() {
         setContentPane(MainCPanel);
